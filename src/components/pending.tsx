@@ -1,60 +1,95 @@
 import { useState } from 'react';
 import { Check, Clock } from 'lucide-react';
 import type { Profile, Project } from '@shared/types';
-import { Btn, Confirm, Tile } from './bits';
+import { AGREEMENT_LABELS, LIMITS } from '@shared/rules';
+import { Btn, Confirm, Modal, Tile } from './bits';
 import { Chat } from './chat';
-import { termsLine } from './prospect-card';
+import { AcceptSheet, AgreementEditor, AgreementView, ExportButton } from './agreement';
+import { SafetyButton } from './safety';
 import { useAct } from '@/lib/act';
-import { fmtDate, photoUrl, useNow } from '@/lib/util';
+import { fmtInstant, photoUrl, projectLabel, timeLeft, useNow } from '@/lib/util';
 
-const H72 = 72 * 3600 * 1000;
-
-// Pending mode replaces discovery: one possible project, 72 hours, decide together.
+// A proposed project: 72 hours to agree one version of the work agreement, together.
 export function Pending({ project, me }: { project: Project; me: Profile }) {
   const { run, pending } = useAct();
   const [pass, setPass] = useState(false);
-  const now = useNow();
+  const [edit, setEdit] = useState(false);
+  const [accept, setAccept] = useState(false);
+  const [missing, setMissing] = useState(false);
+  const now = useNow(60_000);
   const vol = me.kind === 'volunteer';
   const other = vol ? project.nonprofit : project.volunteer;
   const mine = vol ? project.volunteerConfirmed : project.nonprofitConfirmed;
-  const rem = Math.max(0, new Date(project.pendingUntil).getTime() - now);
-  const pct = Math.min(100, Math.max(0, (1 - rem / H72) * 100));
-  const hh = Math.floor(rem / 3600000), mm = Math.floor((rem % 3600000) / 60000);
-  const t = project.posting.terms;
+  const theirs = vol ? project.nonprofitConfirmed : project.volunteerConfirmed;
+  const rem = Date.parse(project.pendingUntil) - now;
+  const total = LIMITS.decisionHours * 3600_000;
+  const pct = Math.min(100, Math.max(0, (1 - rem / total) * 100));
+  const a = project.agreement;
+  const status = projectLabel(project, me.kind);
+  const gaps = project.missing ?? [];
   return (
     <div className="mx-auto w-full max-w-lg space-y-5 text-plum">
-      <p className="text-xs font-bold uppercase tracking-[0.2em] text-plum/60">Pending project</p>
-      <div className="flex items-center gap-4">
-        <Tile name={other.name} src={other.photos[0] ? photoUrl(other.photos[0]) : undefined} className="h-20 w-20 shrink-0 rounded-2xl text-3xl" />
-        <div>
-          <h1 className="font-serif text-4xl leading-none">{other.name}</h1>
-          <p className="mt-1 text-sm text-plum/70">{vol ? project.posting.title : other.title}</p>
+      <div>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-plum/65">Proposed project · {status.label}</p>
+        <div className="mt-3 flex items-center gap-4">
+          <Tile name={other.name} alt="" src={other.photos[0] ? photoUrl(other.photos[0]) : undefined} className="h-20 w-20 shrink-0 rounded-2xl text-3xl" />
+          <div className="min-w-0">
+            <h1 className="font-serif text-4xl leading-none">{other.name}</h1>
+            <p className="mt-1 text-sm text-plum/75">{a.title}</p>
+          </div>
         </div>
       </div>
-      <div className="rounded-3xl bg-plum p-5 text-cream">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-cream/60"><Clock size={14} />Time left to decide</div>
-        <p className="mt-1 font-serif text-4xl tabular-nums">{Math.floor(hh / 24)} days {hh % 24} hrs {String(mm).padStart(2, '0')} min</p>
-        <p className="mt-2 text-sm text-cream/75">If you don't both confirm in time, this closes and the role reopens.</p>
-        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-cream/20"><div className="h-full rounded-full bg-apricot" style={{ width: `${pct}%` }} /></div>
+
+      <section aria-label="Decision deadline" className="rounded-3xl bg-plum p-5 text-cream">
+        <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-cream/70"><Clock size={14} aria-hidden />Decide by</div>
+        <p className="mt-1 font-serif text-3xl">{fmtInstant(project.pendingUntil)}</p>
+        <p className="mt-1 text-sm text-cream/80">{timeLeft(rem)}</p>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-cream/20" aria-hidden><div className="h-full rounded-full bg-apricot" style={{ width: `${pct}%` }} /></div>
+        <p className="mt-3 text-xs text-cream/75">If you don't both accept the same version by then, this closes and the posting reopens. Editing the agreement doesn't move the deadline. Email reminders aren't set up yet, so check back here.</p>
+      </section>
+
+      <div className="flex flex-wrap gap-2">
+        {[{ n: 'You', c: mine }, { n: other.name, c: theirs }].map((x) => (
+          <span key={x.n} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${x.c ? 'bg-sage/30' : 'bg-plum/10 text-plum/75'}`}>
+            {x.c ? <Check size={12} aria-hidden /> : <Clock size={12} aria-hidden />}{x.n}: {x.c ? `accepted version ${a.version}` : 'not accepted yet'}
+          </span>
+        ))}
       </div>
-      <div className="rounded-3xl border border-plum/15 bg-white/50 p-5">
-        <p className="font-serif text-xl">What you're both saying yes to</p>
-        <p className="mt-1 font-serif text-2xl">{termsLine(t)}</p>
-        <p className="mt-1 text-sm text-plum/65">Starting {fmtDate(t.startDate || project.startDate)}</p>
+
+      <section className="rounded-3xl border border-plum/15 bg-white/50 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="font-serif text-2xl">Work agreement</h2>
+          <span className="shrink-0 rounded-full bg-plum/10 px-2.5 py-1 text-xs font-semibold">Version {a.version}</span>
+        </div>
+        <p className="mt-1 text-xs text-plum/65">{a.editedBy === 'system' ? 'Started from the posting.' : `Last edited by ${a.editedByName}, ${fmtInstant(a.editedAt)}.`} Both of you see this same version.</p>
+        {gaps.length > 0 && (
+          <p className="mt-3 rounded-2xl bg-apricot/25 p-3 text-sm" role="status">
+            {gaps.length} {gaps.length === 1 ? 'thing' : 'things'} still needed before anyone can accept: {gaps.map((k) => AGREEMENT_LABELS[k as keyof typeof AGREEMENT_LABELS] ?? k).join(', ')}.
+          </p>
+        )}
+        <div className="mt-3"><AgreementView a={a} minStart={project.minStart} pending /></div>
         <div className="mt-4 flex flex-wrap gap-2">
-          {[{ n: vol ? 'You' : project.volunteer.name, c: project.volunteerConfirmed }, { n: !vol ? 'You' : project.nonprofit.name, c: project.nonprofitConfirmed }].map((x) => (
-            <span key={x.n} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${x.c ? 'bg-sage/30 text-plum' : 'bg-plum/10 text-plum/60'}`}>
-              {x.c ? <Check size={12} /> : <Clock size={12} />}{x.n}: {x.c ? 'confirmed' : 'waiting'}
-            </span>
-          ))}
+          <Btn v="ghost" onClick={() => setEdit(true)}>Edit agreement</Btn>
+          <ExportButton project={project} />
         </div>
-      </div>
+      </section>
+
       <Chat project={project} meId={me.id} />
-      <div className="pb-safe fixed inset-x-0 bottom-16 z-20 mx-auto flex max-w-2xl gap-3 border-t border-plum/15 bg-cream px-4 py-3">
+      <div className="text-right"><SafetyButton targetId={other.id} targetName={other.name} projectId={project.id} /></div>
+
+      <div className="pb-safe sticky bottom-16 z-20 -mx-4 flex gap-3 border-t border-plum/15 bg-cream px-4 py-3">
         <Btn v="ghost" className="flex-1" disabled={pending} onClick={() => setPass(true)}>Pass</Btn>
-        <Btn className="flex-1" disabled={pending || mine} onClick={() => run({ action: 'confirm', projectId: project.id })}>{mine ? 'Waiting for them' : 'Confirm project'}</Btn>
+        <Btn className="flex-1" disabled={pending || mine} onClick={() => (gaps.length ? setMissing(true) : setAccept(true))}>{mine ? 'Waiting for them' : 'Review and accept'}</Btn>
       </div>
-      {pass && <Confirm title="Pass on this project?" body="This ends the pending project and takes you back to discovery. It can't be undone." cta="Pass" danger busy={pending} onNo={() => setPass(false)} onYes={() => run({ action: 'pass', projectId: project.id }, { done: () => setPass(false) })} />}
+      {edit && <AgreementEditor project={project} onClose={() => setEdit(false)} />}
+      {accept && <AcceptSheet project={project} side={me.kind} onClose={() => setAccept(false)} />}
+      {missing && (
+        <Modal title="Not ready to accept yet" onClose={() => setMissing(false)}>
+          <p className="mb-4 text-sm">Fill in: {gaps.map((k) => AGREEMENT_LABELS[k as keyof typeof AGREEMENT_LABELS] ?? k).join(', ')}.</p>
+          <Btn className="w-full" onClick={() => { setMissing(false); setEdit(true); }}>Edit agreement</Btn>
+        </Modal>
+      )}
+      {pass && <Confirm title="Pass on this project?" body={`This closes the proposed project with ${other.name}. Your profile and other postings stay as they are, and they'll be told politely.`} cta="Pass" danger busy={pending} onNo={() => setPass(false)} onYes={() => run({ action: 'pass', projectId: project.id }, { done: () => setPass(false) })} />}
     </div>
   );
 }

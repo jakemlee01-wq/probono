@@ -30,3 +30,8 @@
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
 .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+@media (prefers-reduced-motion: reduce) {
+  .rise, .sheet-in, .slide-in, .animate-pulse { animation: none !important; }
+  html { scroll-behavior: auto; }
+}
+:focus-visible { outline: 2px solid var(--color-apricot); outline-offset: 2px; }
