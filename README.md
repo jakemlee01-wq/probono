@@ -49,9 +49,7 @@ Invite codes for new volunteers: `TWINCITIES`, `GIVE5`, `FINANCEFORGOOD` (25 use
 
 1. **Supabase:** create a free project. Note the project ref (the part of the URL before `.supabase.co`), the Project URL, the anon public key, and the database password.
 2. **Supabase personal access token:** supabase.com, Account, Access Tokens, generate one.
-3. **GitHub repo settings**, Secrets and variables, Actions:
-   - Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`
-   - Variables: `SUPABASE_PROJECT_REF`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+3. **GitHub repo settings**, Secrets and variables, Actions, Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`. The project URL and public anon key are in `.env.production`; the project ref is in the workflow.
 4. **GitHub Pages:** Settings, Pages, Source: **GitHub Actions**.
 5. **Supabase Auth URLs:** Authentication, URL Configuration. Set Site URL to `https://jakemlee01-wq.github.io/probono/` and add the same address under Redirect URLs. This makes confirmation and password-reset emails come back to the site.
 6. Push to `main` (or re-run the Deploy workflow). The first request seeds the demo data.
