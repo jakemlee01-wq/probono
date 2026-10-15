@@ -2,72 +2,60 @@
 
 Lend your skills to a Twin Cities nonprofit, a few hours at a time.
 
-A phone-first app that connects volunteers (finance and accounting to start) with local nonprofits for short, scoped pro bono projects. Volunteers set their own terms: hours a week, how many weeks, when they're free. Both sides only see people and postings that fit.
+A small, phone-first pilot that introduces accounting and finance volunteers to local nonprofits for short, scoped pro bono projects. Volunteers join by invite. Nonprofits register freely and are reviewed by hand before volunteers can see them.
 
 ## How it works
 
-The app has three modes, and only one shows at a time:
+1. **Discover** (plum). One prospect at a time, only ones that fit: skills, hours, weeks, dates, and format. **Not now** or **Show interest**. Nonprofits write a real message (20 to 1,000 characters) and get five per posting; replying to someone already interested is free.
+2. **Proposed project.** When interest is mutual, both sides have 72 hours to agree a one-page work agreement: deliverables, how completion is judged, scope and exclusions, inputs, time, system access (defaults to none), and check-ins. Every edit makes a new version. Each side accepts a specific version, with a confidentiality and licensing acknowledgment, and the project starts only when both accept the same one.
+3. **Partnership.** Kickoff checklist, hours (self-reported until the nonprofit confirms them), check-ins, tasks, messages, people and links. Either side can propose a change (both re-accept) or stop the project.
+4. **Completion.** Either side marks the work complete with a closing note. It completes when both notes are in. The nonprofit says whether it unblocked them and confirms the hours.
 
-1. **Discovery** (plum). One prospect at a time: photos and their own words, swipe through, then **Not now** or **Show interest**. Volunteers join by invite code. Nonprofits write a real note and get five per posting; answering someone who's already interested is free.
-2. **Pending** (cream). When interest is mutual, an "It's mutual" pop-up appears, then a pending project replaces discovery: a 3-day countdown, the agreed terms, a chat, and **Pass** or **Confirm project**. If time runs out, it lapses and the role reopens.
-3. **Partnership** (cream with a plum header). Once both confirm: weekly hours against the commitment, next check-in, deliverables, messages, team and links. In the final week each side writes a closing note. After the end date, the project closes, the notes go on each other's track record, and both return to discovery.
+Navigation stays the same throughout: Discover, Projects, Profile. One proposed or active project at a time per volunteer and per posting; Discover explains this instead of disappearing.
 
-One pending or active project at a time per volunteer, and per nonprofit posting.
+Safety: report and block on every profile, card, and project; blocking stops shared work and hides both sides. Reports are private. Operators review organizations, handle reports, and issue invites from the Supabase SQL editor (`docs/operations.md`).
+
+## The demo
+
+"Try the demo" runs the real engine in the visitor's own browser against fictional fixtures. It creates no account and sends nothing to the server, so visitors never see each other's demo. The demo bar has **Switch**, **Restart my demo**, and **Exit demo**.
 
 ## Stack
 
-- **Website:** React 18, TypeScript, Vite, Tailwind 4, hash routing. Hosted on GitHub Pages.
-- **Backend:** Supabase (free tier). Auth for sign-in, Postgres for data, Storage for profile photos, and one Edge Function (`api`) that holds all the rules.
-- The website never reads tables directly. Every change goes through `supabase/functions/api/engine.ts`, inside a transaction with a lock, so two people can't grab the same volunteer at once.
+- **Website:** React 18, TypeScript, Vite, Tailwind 4, hash routing, on GitHub Pages.
+- **Backend:** Supabase: Auth, Postgres, Storage (profile photos), and one Edge Function, `api`.
+- The website never reads tables directly. Row level security is on with no policies and table grants are revoked, so only the function (connected as the owner) can. Every change goes through the shared engine inside a locked transaction.
 
 ## Where things live
 
 ```text
-src/pages/                 landing, sign-in/up, password reset, the app shell
-src/components/            discovery card, pending, partnership workspace, profile, postings, demo bar
-src/lib/                   Supabase client, API calls, session, toasts
-supabase/functions/_shared/types.ts   data shapes shared by the site and the function
-supabase/functions/api/engine.ts      the state machine: matching, interest, pending, projects
-supabase/functions/api/seed.ts        demo data and demo accounts (dates are relative to today)
-supabase/functions/api/index.ts       routes: /config, /state, /actions, /demo/sign-in, /demo/reset
-supabase/migrations/       tables, row level security, photo bucket
-public/assets/demo-photos/ photos for the six demo profiles (AI-generated, fictional people)
-.github/workflows/deploy.yml  migrations + function to Supabase, site to GitHub Pages
+supabase/functions/_shared/core.ts      the engine: matching, interest, agreement, lifecycle, safety (pure TypeScript)
+supabase/functions/_shared/rules.ts     field limits and validation, used by forms and the engine
+supabase/functions/_shared/types.ts     data shapes and the skill/cause catalog
+supabase/functions/_shared/fixtures.ts  fictional demo data (browser only)
+supabase/functions/api/engine.ts        Postgres adapter, invite redemption, account deletion
+supabase/functions/api/index.ts         routes: /config, /invites/check, /state, /actions, /account/delete
+supabase/migrations/                    tables, locked-down access, photo bucket, admin tools
+src/lib/demo-store.ts                   the in-browser demo
+src/pages, src/components               screens
+tests/                                  engine, database access, and browser tests
+docs/operations.md                      running the pilot: invites, reviews, reports, release gates
+docs/policies-draft.md                  policy drafts for owner review (not published)
 ```
 
-## Demo mode
-
-On by default (`DEMO_MODE=on`). The sign-in screens get a **Try the demo** link that drops you into Sally, Marcus, Riverside, or Northside with one tap, no password. A bar at the top switches accounts or resets the demo data. Inside a project, **Skip ahead a week** lets you try the hand-off and close without waiting.
-
-Riverside is already interested in Sally, and Marcus is already interested in Northside's NetSuite posting, so the full flow works right away.
-
-To turn it off before real users join: in GitHub, Settings, Secrets and variables, Actions, Variables, set `DEMO_MODE` to `off` and re-run the deploy.
-
-Invite codes for new volunteers: `TWINCITIES`, `GIVE5`, `FINANCEFORGOOD` (25 uses each).
-
-## One-time setup
-
-1. **Supabase:** create a free project. Note the project ref (the part of the URL before `.supabase.co`), the Project URL, the anon public key, and the database password.
-2. **Supabase personal access token:** supabase.com, Account, Access Tokens, generate one.
-3. **GitHub repo settings**, Secrets and variables, Actions, Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`. The project URL and public anon key are in `.env.production`; the project ref is in the workflow.
-4. **GitHub Pages:** Settings, Pages, Source: **GitHub Actions**.
-5. **Supabase Auth URLs:** Authentication, URL Configuration. Set Site URL to `https://jakemlee01-wq.github.io/probono/` and add the same address under Redirect URLs. This makes confirmation and password-reset emails come back to the site.
-6. Push to `main` (or re-run the Deploy workflow). The first request seeds the demo data.
-
-## Run it locally
+## Tests
 
 ```bash
-npm install
-cp .env.example .env.local   # fill in your Supabase URL and anon key
-npm run dev
+deno test --config tests/deno.json tests/core.test.ts          # engine rules (no database needed)
+PGHOST=... PGPORT=... PGUSER=postgres tests/db/run.sh          # access checks + adapter, on a fresh local database
+tests/check-build-secrets.sh dist                              # no privileged keys in the build
 ```
 
-The function runs on Supabase, so local development talks to the real project.
+Browser tests (`tests/e2e/`) need Playwright and a local server; see the comments at the top of each file. The Deploy workflow runs the first three on every push and pull request, and deploys only from `main` after they pass.
+
+## Setup and deploy
+
+See `docs/operations.md`. In short: GitHub secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD`, GitHub Pages set to GitHub Actions, Supabase Auth URLs pointing at the site, then push to `main`.
 
 ## Costs
 
-Everything here fits the free tiers: GitHub Pages, Supabase (500 MB database, 1 GB storage, 500k function calls a month). The app checks for updates every 8 seconds while open, which is roughly 3,600 calls per hour of active use.
-
-Supabase's built-in email sender is rate limited (a few emails an hour). That's fine for testing. Before launch, connect a real email provider under Authentication, SMTP.
-
-Free Supabase projects pause after a week with no activity. Opening the dashboard and clicking Restore brings it back.
+Built to fit free tiers. The app checks for updates every 8 seconds while open. Check Supabase's current free-plan terms for inactivity pausing before relying on it for real users.
