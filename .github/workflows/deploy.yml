@@ -1,11 +1,14 @@
 name: Deploy
 
 # On every push to main:
+#   0. test: engine rules, database access checks, and a production build. Nothing deploys if these fail.
 #   1. backend: apply database migrations and deploy the "api" Edge Function to Supabase
 #   2. site: build the website and publish it to GitHub Pages
+# Pull requests and other branches run the tests only.
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -16,7 +19,42 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Engine rules
+        run: deno test --config tests/deno.json tests/core.test.ts
+      - name: Database access checks and adapter
+        run: DENO=deno tests/db/run.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Production build
+        run: npm run build
+      - name: No privileged keys in the build
+        run: tests/check-build-secrets.sh dist
+
   backend:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -37,14 +75,12 @@ jobs:
         run: supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
       - name: Apply database migrations
         run: supabase db push --password "$SUPABASE_DB_PASSWORD"
-      - name: Turn on demo mode
-        run: supabase secrets set DEMO_MODE=${{ vars.DEMO_MODE || 'on' }} --project-ref "$PROJECT_REF"
       - name: Deploy the api function
         run: supabase functions deploy api --no-verify-jwt --project-ref "$PROJECT_REF"
 
   site:
     needs: backend
-    if: always()
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

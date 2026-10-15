@@ -1,372 +1,175 @@
-// The probono state machine. Every read and write goes through runEngine inside one
-// database transaction, serialized with an advisory lock so two people can't both
-// grab the same volunteer or posting at the same moment.
-//
-// Engagement lifecycle (per posting + volunteer pair):
-//   interest -> pending (mutual, 72 h to confirm) -> active -> wrapping_up (final week) -> closed
-//   exits: passed (not now / pass), lapsed (72 h ran out), ended_early
+// Postgres adapter for the shared engine (../_shared/core.ts).
+// Every request runs in one transaction, serialized with an advisory lock, so two people can't
+// both grab the same volunteer or posting, or redeem the same invite, at the same moment.
 import type postgres from 'npm:postgres@3.4.4';
-import {
-  CAUSES, SKILLS,
-  type ActionInput, type ActionResult, type AppState, type Posting, type Profile, type Project,
-} from '../_shared/types.ts';
-import { baseProfile, DAY, DEMO_IDS, isDemoMode, LOCK_ID } from './common.ts';
+import { AppError, runCore, type Block, type Changes, type Ctx, type Db, type InviteOutcome, type NotificationRow, type Pair, type Report, type ReviewRow } from '../_shared/core.ts';
+import { normalizeInvite, RATE } from '../_shared/rules.ts';
+import type { ActionInput, ActionResult, AppState, Posting, Profile } from '../_shared/types.ts';
+
+export { AppError };
+export const LOCK_ID = 772601;
+
+// Rows left over from the first version's shared, server-side demo. They are never shown to
+// real users and are never edited by the engine. docs/operations.md explains how to remove them.
+export const LEGACY_DEMO_IDS = ['sally', 'marcus', 'priya', 'northside', 'riverside', 'eastside'];
 
 type Tx = postgres.TransactionSql;
-type EngagementData = {
-  volunteerInterested?: boolean;
-  nonprofitInterested?: boolean;
-  volunteerNote?: string;
-  nonprofitNote?: string;
-  acknowledgements: Record<string, string>;
-  project?: Project;
-};
-type Pair = { id: string; posting_id: string; volunteer_id: string; status: string; data: EngagementData };
+export type User = { id: string; email: string };
 
-export class AppError extends Error {
-  constructor(message: string, public status = 400) { super(message); }
-}
-function need(condition: unknown, message: string): asserts condition {
-  if (!condition) throw new AppError(message);
+export async function sha256hex(s: string) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-const busy = (status: string) => ['pending', 'active', 'wrapping_up'].includes(status);
-const validDate = (v: string) => Number.isFinite(Date.parse(v));
-
-
-function validateTerms(t: Posting['terms']) {
-  need(t && t.hoursPerWeek > 0 && t.hoursPerWeek <= 40, 'Choose between 1 and 40 hours per week.');
-  need(t.weeks >= 1 && t.weeks <= 52 && t.minWeeks >= 1 && t.maxWeeks >= t.minWeeks, 'Please check the project length.');
-  need(validDate(t.startDate) && validDate(t.availableUntil) && Date.parse(t.startDate) < Date.parse(t.availableUntil), 'Please check your available dates.');
+export async function recentEvents(sql: postgres.Sql | Tx, key: string, ms: number) {
+  const [{ n }] = await sql<{ n: number }[]>`select count(*)::int as n from rate_events where key = ${key} and at > now() - ${`${Math.round(ms / 1000)} seconds`}::interval`;
+  return n;
+}
+export async function addEvent(sql: postgres.Sql | Tx, key: string) {
+  await sql`insert into rate_events (key) values (${key})`;
 }
 
-// A volunteer fits a posting when every required skill matches and the posting sits inside their terms.
-function fits(v: Profile, p: Posting) {
-  const start = Date.parse(p.terms.startDate);
-  return !v.paused && p.status === 'Open' &&
-    p.skills.every((s) => v.skills.includes(s)) &&
-    p.terms.hoursPerWeek <= v.terms.hoursPerWeek &&
-    p.terms.weeks >= v.terms.minWeeks && p.terms.weeks <= v.terms.maxWeeks &&
-    p.terms.format === v.terms.format &&
-    start >= Date.parse(v.terms.startDate) &&
-    start + p.terms.weeks * 7 * DAY <= Date.parse(v.terms.availableUntil) + DAY;
+// Looks at an invite without using it. Used by the public "check my invite" step and by redemption.
+export async function inviteStatus(tx: postgres.Sql | Tx, code: string, lock = false) {
+  const norm = normalizeInvite(code);
+  if (norm.length < 8 || norm.length > 64) return { outcome: 'invalid' as InviteOutcome, row: null };
+  const hash = await sha256hex(norm);
+  const rows = lock
+    ? await tx<{ id: string; email: string | null; expires_at: Date; redeemed_at: Date | null; revoked_at: Date | null }[]>`select id, email, expires_at, redeemed_at, revoked_at from invite_tokens where token_hash = ${hash} for update`
+    : await tx<{ id: string; email: string | null; expires_at: Date; redeemed_at: Date | null; revoked_at: Date | null }[]>`select id, email, expires_at, redeemed_at, revoked_at from invite_tokens where token_hash = ${hash}`;
+  const row = rows[0];
+  const outcome: InviteOutcome = !row ? 'invalid' : row.revoked_at ? 'revoked' : row.redeemed_at ? 'redeemed' : row.expires_at.getTime() <= Date.now() ? 'expired' : 'ok';
+  return { outcome, row };
 }
 
-// Only allow photos that are bundled demo assets or that this user uploaded to their own storage folder.
-function photoAllowed(path: string, userId: string) {
-  if (path.startsWith('/assets/demo-photos/')) return true;
-  return path.includes(`/storage/v1/object/public/photos/${userId}/`);
+async function redeemInvite(tx: Tx, user: User, code: string): Promise<InviteOutcome> {
+  if ((await recentEvents(tx, `invite_fail:${user.id}`, 3600_000)) >= RATE.inviteRedeemFailuresPerHour) return 'too_many';
+  const { outcome, row } = await inviteStatus(tx, code, true);
+  if (outcome !== 'ok' || !row) return outcome;
+  if (row.email && row.email !== user.email.trim().toLowerCase()) return 'wrong_email';
+  // Consumed inside the same transaction as the profile insert: if anything later fails, the invite is not used up.
+  const done = await tx`update invite_tokens set redeemed_at = now(), redeemed_by = ${user.id} where id = ${row.id} and redeemed_at is null and revoked_at is null returning id`;
+  return done.length ? 'ok' : 'redeemed';
 }
 
-export async function runEngine(tx: Tx, userId: string, action?: ActionInput, selectedPostingId?: string): Promise<AppState | ActionResult> {
+async function load(tx: Tx, userId: string): Promise<Db> {
+  const ids = LEGACY_DEMO_IDS;
+  const profiles = await tx<{ id: string; user_id: string | null; data: Profile }[]>`select id, user_id, data from profiles where id not in ${tx(ids)}`;
+  const postings = await tx<{ data: Posting }[]>`select data from postings where org_id not in ${tx(ids)}`;
+  const pairs = await tx<{ id: string; posting_id: string; volunteer_id: string; status: string; data: Pair['data'] }[]>`
+    select e.id, e.posting_id, e.volunteer_id, e.status, e.data from engagements e join postings p on p.id = e.posting_id
+    where e.volunteer_id not in ${tx(ids)} and p.org_id not in ${tx(ids)}`;
+  const mine = profiles.find((p) => p.user_id === userId)?.id ?? '';
+  const reviews = await tx<{ profile_id: string; kind: ReviewRow['kind']; status: ReviewRow['status']; method: string; decided_at: Date }[]>`
+    select distinct on (profile_id, kind) profile_id, kind, status, method, decided_at from reviews order by profile_id, kind, decided_at desc`;
+  const restricted = await tx<{ profile_id: string }[]>`select profile_id from restrictions where lifted_at is null`;
+  const blocks = await tx<{ id: string; blocker_id: string; blocked_id: string; created_at: Date }[]>`select id, blocker_id, blocked_id, created_at from blocks`;
+  const reports = await tx<{ id: string; reporter_id: string; target_id: string; created_at: Date; category: string }[]>`
+    select id, reporter_id, target_id, created_at, category from reports where reporter_id = ${mine} and created_at > now() - interval '1 day'`;
+  const notes = await tx<{ id: string; recipient_id: string; kind: NotificationRow['kind']; text: string; project_id: string | null; posting_id: string | null; created_at: Date; read_at: Date | null }[]>`
+    select id, recipient_id, kind, text, project_id, posting_id, created_at, read_at from notifications
+    where recipient_id = ${mine} or read_at is null order by created_at desc limit 2000`;
+  return {
+    profiles: profiles.map((r) => ({ id: r.id, userId: r.user_id, data: r.data })),
+    postings: postings.map((r) => r.data),
+    pairs: pairs.map((r) => ({ id: r.id, postingId: r.posting_id, volunteerId: r.volunteer_id, status: r.status, data: r.data })),
+    reviews: reviews.map((r) => ({ profileId: r.profile_id, kind: r.kind, status: r.status, method: r.method, decidedAt: r.decided_at.toISOString() })),
+    restricted: restricted.map((r) => r.profile_id),
+    blocks: blocks.map((b) => ({ id: b.id, blockerId: b.blocker_id, blockedId: b.blocked_id, createdAt: b.created_at.toISOString() })),
+    reports: reports.map((r) => ({ id: r.id, reporterId: r.reporter_id, targetId: r.target_id, postingId: null, projectId: null, category: r.category, note: '', createdAt: r.created_at.toISOString() })),
+    notifications: notes.map((n) => ({ id: n.id, recipientId: n.recipient_id, kind: n.kind, text: n.text, projectId: n.project_id ?? undefined, postingId: n.posting_id ?? undefined, createdAt: n.created_at.toISOString(), readAt: n.read_at?.toISOString() ?? null })),
+  };
+}
+
+async function persist(tx: Tx, db: Db, ch: Changes) {
+  for (const id of ch.newProfiles) {
+    const r = db.profiles.find((x) => x.id === id)!;
+    await tx`insert into profiles (id, user_id, data) values (${r.id}, ${r.userId}, ${tx.json(r.data)})`;
+  }
+  for (const id of ch.profiles) {
+    if (ch.newProfiles.has(id)) continue;
+    const r = db.profiles.find((x) => x.id === id)!;
+    await tx`update profiles set data = ${tx.json(r.data)} where id = ${id}`;
+  }
+  for (const id of new Set([...ch.newPostings, ...ch.postings])) {
+    const p = db.postings.find((x) => x.id === id)!;
+    const { visible: _v, ...data } = p;
+    await tx`insert into postings (id, org_id, data) values (${p.id}, ${p.orgId}, ${tx.json(data)}) on conflict (id) do update set data = excluded.data`;
+  }
+  for (const id of new Set([...ch.newPairs, ...ch.pairs])) {
+    const r = db.pairs.find((x) => x.id === id)!;
+    await tx`insert into engagements (id, posting_id, volunteer_id, status, data) values (${r.id}, ${r.postingId}, ${r.volunteerId}, ${r.status}, ${tx.json(r.data)})
+      on conflict (id) do update set status = excluded.status, data = excluded.data`;
+  }
+  for (const b of ch.blocksAdded as Block[]) {
+    await tx`insert into blocks (id, blocker_id, blocked_id, created_at) values (${b.id}, ${b.blockerId}, ${b.blockedId}, ${b.createdAt}) on conflict do nothing`;
+  }
+  if (ch.blocksRemoved.length) await tx`delete from blocks where id in ${tx(ch.blocksRemoved)}`;
+  for (const r of ch.reports as Report[]) {
+    await tx`insert into reports (id, reporter_id, target_id, posting_id, project_id, category, note, created_at)
+      values (${r.id}, ${r.reporterId}, ${r.targetId}, ${r.postingId}, ${r.projectId}, ${r.category}, ${r.note}, ${r.createdAt})`;
+    await tx`insert into report_events (report_id, actor, action) values (${r.id}, ${r.reporterId}, 'created')`;
+  }
+  for (const id of ch.notifications) {
+    const n = db.notifications.find((x) => x.id === id)!;
+    await tx`insert into notifications (id, recipient_id, kind, text, project_id, posting_id, created_at, read_at)
+      values (${n.id}, ${n.recipientId}, ${n.kind}, ${n.text}, ${n.projectId ?? null}, ${n.postingId ?? null}, ${n.createdAt}, ${n.readAt})
+      on conflict (id) do update set text = excluded.text, created_at = excluded.created_at, read_at = excluded.read_at`;
+  }
+}
+
+export async function runEngine(tx: Tx, user: User, photoPrefix: string, action?: ActionInput, selectedPostingId?: string):
+  Promise<{ result: AppState | ActionResult; removedPhotos: string[] }> {
   await tx`select pg_advisory_xact_lock(${LOCK_ID})`;
-  const profileRows = await tx<{ id: string; user_id: string | null; data: Profile }[]>`select id, user_id, data from profiles`;
-  const roleRows = await tx<{ id: string; data: Posting }[]>`select id, data from postings`;
-  const pairs = await tx<Pair[]>`select id, posting_id, volunteer_id, status, data from engagements`;
-  const people = new Map(profileRows.map((r) => [r.id, r.data]));
-  const roles = new Map(roleRows.map((r) => [r.id, r.data]));
-  let me = people.get(profileRows.find((r) => r.user_id === userId)?.id ?? '');
-
-  const saveProfile = async (p: Profile) => { people.set(p.id, p); await tx`update profiles set data = ${tx.json(p)} where id = ${p.id}`; };
-  const saveRole = async (p: Posting) => { roles.set(p.id, p); await tx`update postings set data = ${tx.json(p)} where id = ${p.id}`; };
-  const savePair = async (r: Pair) => { await tx`update engagements set status = ${r.status}, data = ${tx.json(r.data)} where id = ${r.id}`; };
-  const refreshRole = async (id: string) => {
-    const p = roles.get(id);
-    if (!p) return;
-    const occupied = pairs.find((r) => r.posting_id === id && busy(r.status));
-    p.status = occupied ? (occupied.status === 'pending' ? 'Pending' : 'Active project')
-      : pairs.some((r) => r.posting_id === id && r.status === 'closed') ? 'Complete' : 'Open';
-    await saveRole(p);
+  const db = await load(tx, user.id);
+  const ctx: Ctx = {
+    userId: user.id, now: Date.now(), demo: false, uuid: () => crypto.randomUUID(), photoPrefix,
+    redeemInvite: (code) => redeemInvite(tx, user, code),
   };
-  const finish = async (r: Pair) => {
-    const p = r.data.project!;
-    if (r.status === 'closed' || !p.volunteerClosingNote || !p.nonprofitClosingNote || Date.now() < Date.parse(p.endDate)) return;
-    r.status = p.status = 'closed';
-    p.totalHours = p.hours.reduce((n, h) => n + h.hours, 0);
-    const credits: [string, string, string][] = [
-      [r.volunteer_id, p.nonprofitClosingNote, p.nonprofit.name],
-      [p.posting.orgId, p.volunteerClosingNote, p.volunteer.name],
-    ];
-    for (const [id, note, author] of credits) {
-      const profile = people.get(id);
-      if (!profile) continue;
-      profile.completedProjects += 1;
-      if (profile.kind === 'volunteer') profile.hoursGiven += p.totalHours;
-      profile.quotes.push({ author, text: note });
-      await saveProfile(profile);
-    }
-    await savePair(r);
-    await refreshRole(r.posting_id);
-  };
+  const { result, changes } = await runCore(db, ctx, action, selectedPostingId);
+  await persist(tx, db, changes);
+  return { result, removedPhotos: changes.removedPhotos.filter((p) => p.startsWith(photoPrefix)) };
+}
 
-  // Time-based transitions run on every request, so nothing needs a scheduler.
+// Account deletion. Removes the person from discovery, stops shared work, and scrubs their name
+// from records the other side keeps. Safe to run again if a later step failed.
+export async function deleteAccount(tx: Tx, userId: string) {
+  await tx`select pg_advisory_xact_lock(${LOCK_ID})`;
+  const [row] = await tx<{ id: string; data: Profile }[]>`select id, data from profiles where user_id = ${userId}`;
+  if (!row) return;
+  const me = row.data;
+  const now = new Date().toISOString();
+  const pairs = await tx<{ id: string; posting_id: string; volunteer_id: string; status: string; data: Pair['data']; org_id: string }[]>`
+    select e.id, e.posting_id, e.volunteer_id, e.status, e.data, p.org_id from engagements e join postings p on p.id = e.posting_id
+    where e.volunteer_id = ${me.id} or p.org_id = ${me.id}`;
+  const gone = 'Deleted account';
   for (const r of pairs) {
     const p = r.data.project;
-    if (!p) continue;
-    if (r.status === 'pending' && Date.now() >= Date.parse(p.pendingUntil)) {
-      r.status = p.status = 'lapsed';
-      await savePair(r); await refreshRole(r.posting_id);
+    let status = r.status;
+    if (['interest'].includes(status)) status = 'passed';
+    if (p) {
+      const otherId = r.volunteer_id === me.id ? r.org_id : r.volunteer_id;
+      if (['pending', 'active', 'completion_pending', 'wrapping_up'].includes(status)) {
+        status = 'ended_early';
+        Object.assign(p, { endedBy: me.id, endedReason: 'The other account was deleted.', endedAt: now });
+        await tx`insert into notifications (id, recipient_id, kind, text, project_id) values (${crypto.randomUUID()}, ${otherId}, 'ended', ${`"${p.agreement?.title ?? p.posting.title}" was stopped because the other account was deleted.`}, ${r.id})`;
+      }
+      p.status = status as typeof p.status;
+      const scrub = (x: Profile) => Object.assign(x, { name: gone, photos: [], title: '', credential: '', prompts: { first: '', second: '', third: '' } });
+      if (r.volunteer_id === me.id) scrub(p.volunteer); else scrub(p.nonprofit);
+      for (const m of p.messages ?? []) if (m.senderId === me.id) m.senderName = gone;
+      for (const a of p.acceptances ?? []) if (a.actorId === me.id) a.actorName = gone;
+      if (p.agreement?.editedBy === me.id) p.agreement.editedByName = gone;
+      for (const a of p.agreementHistory ?? []) if (a.editedBy === me.id) a.editedByName = gone;
     }
-    if (r.status === 'active' && Date.now() >= Date.parse(p.endDate) - 7 * DAY) {
-      r.status = p.status = 'wrapping_up';
-      await savePair(r);
-    }
-    if (['active', 'wrapping_up'].includes(r.status)) await finish(r);
+    if (r.volunteer_id === me.id) { r.data.volunteerNote = ''; } else { r.data.nonprofitNote = ''; }
+    await tx`update engagements set status = ${status}, data = ${tx.json(r.data)} where id = ${r.id}`;
   }
-
-  if (action) {
-    const a = action;
-    if (a.action === 'onboard') {
-      need(!me, 'Your profile is already set up.');
-      need(a.kind && a.name && a.name.trim(), 'Choose your account type and name.');
-      if (a.kind === 'volunteer') {
-        const code = (a.inviteCode ?? '').trim().toUpperCase();
-        const [invite] = await tx<{ code: string; remaining: number }[]>`select code, remaining from invites where code = ${code}`;
-        need(invite && invite.remaining > 0, "That invite code isn't available.");
-        await tx`update invites set remaining = remaining - 1 where code = ${invite.code}`;
-      }
-      me = baseProfile(crypto.randomUUID(), a.kind, a.name.trim().slice(0, 120));
-      await tx`insert into profiles (id, user_id, data) values (${me.id}, ${userId}, ${tx.json(me)})`;
-      return { ok: true, message: 'Welcome to probono.' };
-    }
-    need(me, 'Set up your profile first.');
-
-    if (a.action === 'update_profile') {
-      need(a.profile, 'Profile is required.');
-      validateTerms(a.profile.terms);
-      need(a.profile.name.trim(), 'Please add your name.');
-      need(a.profile.skills.every((s) => SKILLS.includes(s)) && a.profile.causes.every((s) => CAUSES.includes(s)), 'Choose skills and causes from the list.');
-      need(a.profile.photos.length <= 8 && a.profile.photos.every((p) => photoAllowed(p, userId) || me!.photos.includes(p)), 'Please upload photos using your own account.');
-      const next: Profile = {
-        ...a.profile, id: me.id, kind: me.kind,
-        completedProjects: me.completedProjects, hoursGiven: me.hoursGiven, quotes: me.quotes,
-      };
-      await saveProfile(next);
-      return { ok: true, message: 'Profile saved.' };
-    }
-
-    if (a.action === 'pause') {
-      need(me.kind === 'volunteer', 'Only volunteers can pause their profile.');
-      await saveProfile({ ...me, paused: !!a.paused });
-      return { ok: true, message: a.paused ? 'Your profile is paused.' : "You're open to projects again." };
-    }
-
-    if (a.action === 'create_posting' || a.action === 'update_posting') {
-      need(me.kind === 'nonprofit' && a.posting, 'A nonprofit posting is required.');
-      validateTerms(a.posting.terms);
-      need(a.posting.title.trim() && a.posting.skills.length > 0 && a.posting.skills.every((s) => SKILLS.includes(s)), 'Add a title and at least one skill.');
-      if (a.action === 'create_posting') {
-        const p: Posting = { ...a.posting, id: crypto.randomUUID(), orgId: me.id, status: 'Open', notesLeft: 5 };
-        await tx`insert into postings (id, org_id, data) values (${p.id}, ${p.orgId}, ${tx.json(p)})`;
-      } else {
-        const existing = roles.get(a.posting.id);
-        need(existing?.orgId === me.id && existing.status === 'Open', 'Only your open postings can be edited.');
-        await saveRole({ ...a.posting, id: existing.id, orgId: me.id, status: existing.status, notesLeft: existing.notesLeft });
-      }
-      return { ok: true, message: 'Posting saved.' };
-    }
-
-    if (a.action === 'interest' || a.action === 'not_now') {
-      const role = roles.get(a.postingId ?? '');
-      const v = people.get(me.kind === 'volunteer' ? me.id : a.volunteerId ?? '');
-      need(role && v?.kind === 'volunteer' && (me.kind === 'volunteer' || role.orgId === me.id), "This prospect isn't available.");
-      need(!pairs.some((r) => busy(r.status) && (r.volunteer_id === v.id || r.posting_id === role.id)), 'There is already a pending or active project.');
-      need(fits(v, role), 'The skills or availability no longer fit this project.');
-      let pair = pairs.find((r) => r.posting_id === role.id && r.volunteer_id === v.id);
-      if (!pair) {
-        pair = { id: crypto.randomUUID(), posting_id: role.id, volunteer_id: v.id, status: 'interest', data: { acknowledgements: {} } };
-        await tx`insert into engagements (id, posting_id, volunteer_id, status, data) values (${pair.id}, ${pair.posting_id}, ${pair.volunteer_id}, ${pair.status}, ${tx.json(pair.data)})`;
-        pairs.push(pair);
-      }
-      need(pair.status === 'interest', 'This prospect has already been considered.');
-      if (a.action === 'not_now') {
-        pair.status = 'passed';
-        await savePair(pair);
-        return { ok: true, message: "We'll show you someone else." };
-      }
-      const volunteerSide = me.kind === 'volunteer';
-      need(!pair.data[volunteerSide ? 'volunteerInterested' : 'nonprofitInterested'], "You've already shown interest.");
-      const theyAlreadyAsked = volunteerSide ? pair.data.nonprofitInterested : pair.data.volunteerInterested;
-      if (!volunteerSide && !theyAlreadyAsked) {
-        // Nonprofits write a real note and get five per posting. Answering someone who already
-        // showed interest is free.
-        need((a.note ?? '').trim().length >= 20, 'Write a note of at least 20 characters.');
-        need(role.notesLeft > 0, "You've used the five interest notes for this posting.");
-        role.notesLeft -= 1;
-        await saveRole(role);
-      }
-      pair.data[volunteerSide ? 'volunteerInterested' : 'nonprofitInterested'] = true;
-      pair.data[volunteerSide ? 'volunteerNote' : 'nonprofitNote'] = (a.note ?? '').trim().slice(0, 3000);
-      if (pair.data.volunteerInterested && pair.data.nonprofitInterested) {
-        pair.status = 'pending';
-        pair.data.project = {
-          id: pair.id, posting: structuredClone(role), volunteer: structuredClone(v), nonprofit: structuredClone(people.get(role.orgId)!),
-          status: 'pending', pendingUntil: new Date(Date.now() + 3 * DAY).toISOString(), volunteerConfirmed: false, nonprofitConfirmed: false,
-          startDate: role.terms.startDate, endDate: new Date(Date.parse(role.terms.startDate) + role.terms.weeks * 7 * DAY).toISOString(),
-          week: 1, totalHours: 0, weekHours: 0, messages: [], deliverables: [], links: [], team: [], hours: [],
-          checkInDate: '', checkInAgenda: '', volunteerClosingNote: '', nonprofitClosingNote: '',
-        };
-        await savePair(pair);
-        await refreshRole(role.id);
-      } else {
-        await savePair(pair);
-      }
-      return { ok: true, message: pair.status === 'pending' ? "It's mutual" : 'Interest sent', projectId: pair.data.project?.id };
-    }
-
-    const pair = pairs.find((r) => r.id === a.projectId);
-    need(pair?.data.project, 'Project not found.');
-    const p = pair.data.project;
-    need(me.id === pair.volunteer_id || me.id === p.posting.orgId, "This project isn't yours.");
-    const isVolunteer = me.id === pair.volunteer_id;
-
-    if (a.action === 'acknowledge') {
-      pair.data.acknowledgements[me.id] = pair.status;
-      await savePair(pair);
-      return { ok: true, message: 'Noted.' };
-    }
-    if (a.action === 'pass') {
-      need(pair.status === 'pending', 'Only pending projects can be passed.');
-      pair.status = p.status = 'passed';
-      await savePair(pair); await refreshRole(pair.posting_id);
-      return { ok: true, message: "You're back to discovery." };
-    }
-    if (a.action === 'confirm') {
-      need(pair.status === 'pending', 'This confirmation window has closed.');
-      if (isVolunteer) p.volunteerConfirmed = true; else p.nonprofitConfirmed = true;
-      if (p.volunteerConfirmed && p.nonprofitConfirmed) {
-        pair.status = p.status = 'active';
-        p.startDate = new Date(Math.max(Date.now(), Date.parse(p.posting.terms.startDate))).toISOString();
-        p.endDate = new Date(Date.parse(p.startDate) + p.posting.terms.weeks * 7 * DAY).toISOString();
-      }
-      await savePair(pair); await refreshRole(pair.posting_id);
-      return { ok: true, message: pair.status === 'active' ? 'Project confirmed' : "You're confirmed. We'll let the other side know." };
-    }
-    if (a.action === 'demo_advance_week') {
-      // Demo-only time travel so the hand-off and close can be tried without waiting weeks.
-      need(isDemoMode() && DEMO_IDS.includes(me.id), 'Only available in the demo.');
-      need(['active', 'wrapping_up'].includes(pair.status), 'Confirm the project first.');
-      p.startDate = new Date(Date.parse(p.startDate) - 7 * DAY).toISOString();
-      p.endDate = new Date(Date.parse(p.endDate) - 7 * DAY).toISOString();
-      for (const h of p.hours) h.date = new Date(Date.parse(h.date) - 7 * DAY).toISOString().slice(0, 10);
-      if (Date.now() >= Date.parse(p.endDate) - 7 * DAY) pair.status = p.status = 'wrapping_up';
-      await savePair(pair);
-      await finish(pair);
-      return { ok: true, message: 'Moved ahead one week.' };
-    }
-
-    need(busy(pair.status), 'This project has ended.');
-    const note = (a.note ?? '').trim().slice(0, 3000);
-    if (a.action === 'message') {
-      need(note, 'Write a message first.');
-      p.messages.push({ id: crypto.randomUUID(), senderId: me.id, senderName: me.name, text: note, createdAt: new Date().toISOString() });
-    } else {
-      need(pair.status !== 'pending', 'Confirm the project before using the workspace.');
-      if (a.action === 'log_hours') {
-        need(isVolunteer, 'Only the volunteer can log hours.');
-        need(a.hours && a.hours > 0 && a.hours <= 24 && a.date && validDate(a.date), 'Add valid hours and a date.');
-        need(Date.parse(a.date) >= Date.parse(p.startDate.slice(0, 10)) && Date.parse(a.date) <= Math.min(Date.now(), Date.parse(p.endDate)), 'Log hours within the project dates, not in the future.');
-        p.hours.push({ id: crypto.randomUUID(), date: a.date, hours: a.hours, note });
-      } else if (a.action === 'add_deliverable') {
-        need(note, 'Add a deliverable.');
-        p.deliverables.push({ id: crypto.randomUUID(), text: note, done: false });
-      } else if (a.action === 'toggle_deliverable') {
-        const item = p.deliverables.find((x) => x.id === a.itemId);
-        need(item, 'Deliverable not found.');
-        item.done = !item.done;
-      } else if (a.action === 'check_in') {
-        need(a.date && validDate(a.date), 'Add a check-in date and time.');
-        p.checkInDate = a.date; p.checkInAgenda = note;
-      } else if (a.action === 'add_link') {
-        let url: URL;
-        try { url = new URL(a.url ?? ''); } catch { throw new AppError('Add a valid web address.'); }
-        need(['https:', 'http:'].includes(url.protocol) && a.name && a.name.trim(), 'Use a web link with a name.');
-        p.links.push({ id: crypto.randomUUID(), name: a.name.trim().slice(0, 120), url: url.toString() });
-      } else if (a.action === 'remove_link') {
-        p.links = p.links.filter((x) => x.id !== a.itemId);
-      } else if (a.action === 'add_member') {
-        need(a.member && a.member.name.trim(), "Add a team member's name.");
-        p.team.push({ id: crypto.randomUUID(), name: a.member.name.trim(), role: a.member.role ?? '', email: a.member.email ?? '' });
-      } else if (a.action === 'remove_member') {
-        p.team = p.team.filter((x) => x.id !== a.itemId);
-      } else if (a.action === 'close') {
-        need(Date.now() >= Date.parse(p.endDate) - 7 * DAY, 'Hand-off opens in the final week.');
-        need(note.length >= 10, 'Leave a short closing note of at least 10 characters.');
-        if (isVolunteer) p.volunteerClosingNote = note; else p.nonprofitClosingNote = note;
-        await finish(pair);
-      } else if (a.action === 'end_early') {
-        need(note.length >= 10, 'Leave a short note about ending the project.');
-        pair.status = p.status = 'ended_early';
-        p.messages.push({ id: crypto.randomUUID(), senderId: me.id, senderName: me.name, text: `Project ended early: ${note}`, createdAt: new Date().toISOString() });
-        await savePair(pair);
-        await refreshRole(pair.posting_id);
-      } else {
-        throw new AppError('Unknown action.');
-      }
-    }
-    await savePair(pair);
-    return {
-      ok: true,
-      message: a.action === 'close'
-        ? pair.status === 'closed' ? 'Project complete. Thank you for giving your time.' : 'Closing note saved. The project closes after its end date once both notes are in.'
-        : 'Saved.',
-    };
-  }
-
-  if (!me) {
-    return { profile: null, needsOnboarding: true, mode: 'discovery', postings: [], prospects: [], projects: [], currentProject: null, lastClosedProject: null, notification: '' };
-  }
-  const viewer = me;
-  const myRoles = [...roles.values()].filter((p) => p.orgId === viewer.id);
-  const selected = myRoles.find((p) => p.id === selectedPostingId) ?? myRoles.find((p) => p.status !== 'Complete') ?? myRoles[0];
-  const myPairs = pairs.filter((r) => r.volunteer_id === viewer.id || roles.get(r.posting_id)?.orgId === viewer.id);
-  const hydrate = (r: Pair): Project => {
-    const p = structuredClone(r.data.project!);
-    p.volunteer = people.get(r.volunteer_id) ?? p.volunteer;
-    p.nonprofit = people.get(p.posting.orgId) ?? p.nonprofit;
-    p.week = Math.min(p.posting.terms.weeks, Math.max(1, Math.floor((Date.now() - Date.parse(p.startDate)) / (7 * DAY)) + 1));
-    p.totalHours = p.hours.reduce((sum, h) => sum + h.hours, 0);
-    const weekStart = Date.parse(p.startDate.slice(0, 10)) + (p.week - 1) * 7 * DAY;
-    p.weekHours = p.hours.filter((h) => Date.parse(h.date) >= weekStart && Date.parse(h.date) < weekStart + 7 * DAY).reduce((sum, h) => sum + h.hours, 0);
-    return p;
+  const tomb: Profile = {
+    id: me.id, kind: me.kind, name: gone, title: '', years: null, credential: '', foundedYear: null, photos: [], skills: [], causes: [],
+    terms: me.terms, prompts: { first: '', second: '', third: '' }, paused: true, deleted: true,
   };
-  const current = myPairs.find((r) => busy(r.status) && (viewer.kind === 'volunteer' || r.posting_id === selected?.id));
-  const closed = myPairs.find((r) => ['closed', 'lapsed', 'ended_early', 'passed'].includes(r.status) && r.data.project && r.data.acknowledgements[viewer.id] !== r.status);
-
-  const prospects: AppState['prospects'] = [];
-  if (!current && !viewer.paused) {
-    for (const role of roles.values()) {
-      if (viewer.kind === 'nonprofit' && role.id !== selected?.id) continue;
-      if (role.status !== 'Open' || pairs.some((r) => r.posting_id === role.id && busy(r.status))) continue;
-      for (const v of people.values()) {
-        if (v.kind !== 'volunteer' || (viewer.kind === 'volunteer' && v.id !== viewer.id)) continue;
-        if (!fits(v, role) || pairs.some((r) => r.volunteer_id === v.id && busy(r.status))) continue;
-        const r = pairs.find((x) => x.posting_id === role.id && x.volunteer_id === v.id);
-        if (r && (r.status !== 'interest' || (viewer.kind === 'volunteer' ? r.data.volunteerInterested : r.data.nonprofitInterested))) continue;
-        const org = people.get(role.orgId);
-        if (!org) continue;
-        prospects.push({
-          profile: viewer.kind === 'volunteer' ? org : v,
-          posting: role,
-          interestedInYou: !!(viewer.kind === 'volunteer' ? r?.data.nonprofitInterested : r?.data.volunteerInterested),
-          note: (viewer.kind === 'volunteer' ? r?.data.nonprofitNote : r?.data.volunteerNote) ?? '',
-        });
-      }
-    }
-  }
-  prospects.sort((x, y) => Number(y.interestedInYou) - Number(x.interestedInYou));
-
-  return {
-    profile: viewer,
-    needsOnboarding: false,
-    mode: current ? (current.status === 'pending' ? 'pending' : 'project') : 'discovery',
-    postings: myRoles,
-    prospects,
-    projects: myPairs.filter((r) => r.data.project).map(hydrate),
-    currentProject: current ? hydrate(current) : null,
-    lastClosedProject: closed ? hydrate(closed) : null,
-    notification: current && current.data.acknowledgements[viewer.id] !== current.status
-      ? current.status === 'pending' ? 'mutual' : current.status === 'active' ? 'confirmed' : ''
-      : closed ? 'closed' : '',
-  };
+  await tx`update profiles set user_id = null, data = ${tx.json(tomb)} where id = ${me.id}`;
+  await tx`delete from notifications where recipient_id = ${me.id}`;
+  await tx`delete from blocks where blocker_id = ${me.id} or blocked_id = ${me.id}`;
 }
