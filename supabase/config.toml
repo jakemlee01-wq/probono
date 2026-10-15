@@ -1,0 +1,6 @@
+# Minimal Supabase CLI config. The project itself is chosen with `supabase link` in the deploy workflow.
+project_id = "probono"
+
+[functions.api]
+# The function checks sign-in itself, because /config and the demo sign-in are public.
+verify_jwt = false

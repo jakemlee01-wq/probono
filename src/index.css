@@ -1,0 +1,32 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-plum: #3b1d38;
+  --color-plum2: #4e2a4a;
+  --color-plum3: #62395e;
+  --color-cream: #f7f1ea;
+  --color-cream2: #efe5d9;
+  --color-apricot: #e8a268;
+  --color-sage: #7d9a7a;
+  --font-serif: 'Times New Roman', Times, serif;
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+}
+
+@layer base {
+  html, body { background: var(--color-plum); }
+  body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+}
+
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise .6s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes sheet { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.sheet-in { animation: sheet .28s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes slidein { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+.slide-in { animation: slidein .28s ease both; }
+.grain::before { content: ''; position: fixed; inset: 0; pointer-events: none; opacity: .05; z-index: 1;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>"); }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }

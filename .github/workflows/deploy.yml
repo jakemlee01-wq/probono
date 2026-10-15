@@ -1,0 +1,70 @@
+name: Deploy
+
+# On every push to main:
+#   1. backend: apply database migrations and deploy the "api" Edge Function to Supabase
+#   2. site: build the website and publish it to GitHub Pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    if: vars.SUPABASE_PROJECT_REF != ''
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Link project
+        run: supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+      - name: Apply database migrations
+        run: supabase db push --password "$SUPABASE_DB_PASSWORD"
+      - name: Turn on demo mode
+        run: supabase secrets set DEMO_MODE=${{ vars.DEMO_MODE || 'on' }} --project-ref "$PROJECT_REF"
+      - name: Deploy the api function
+        run: supabase functions deploy api --no-verify-jwt --project-ref "$PROJECT_REF"
+
+  site:
+    needs: backend
+    if: always() && needs.backend.result != 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  pages:
+    needs: site
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
