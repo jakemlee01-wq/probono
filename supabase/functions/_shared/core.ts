@@ -70,6 +70,10 @@ export type Ctx = {
   photoPrefix: string;
   // Consumes an invite atomically. Absent in the demo.
   redeemInvite?: (code: string) => Promise<InviteOutcome>;
+  // New nonprofit accounts are refused unless the operator has opened enrollment.
+  nonprofitSignupsOpen?: boolean;
+  // Demo only: a prepared fictional agreement for a posting, so visitors aren't asked to write one.
+  demoPrefill?: (postingId: string) => Partial<AgreementFields> | undefined;
 };
 
 export class AppError extends Error {
@@ -250,6 +254,12 @@ export async function runCore(db: Db, ctx: Ctx, action?: ActionInput, selectedPo
     for (const id of [r.volunteerId, orgOf(r)]) notify(id, 'completed', `"${p.agreement.title}" is complete. Thank you.`, { projectId: p.id });
   };
 
+  const demoAgreement = (role: Posting) => {
+    const base = draftAgreement(role, now);
+    const pre = ctx.demo ? ctx.demoPrefill?.(role.id) : undefined;
+    return pre ? { ...base, ...pre, editedBy: 'system', editedByName: 'Demo example' } : base;
+  };
+
   const result = action ? await act(action) : buildState();
   return { result, changes: ch };
 
@@ -260,6 +270,7 @@ export async function runCore(db: Db, ctx: Ctx, action?: ActionInput, selectedPo
       need(a.kind === 'volunteer' || a.kind === 'nonprofit', 'Choose whether you are a volunteer or a nonprofit.', 'kind');
       const nameErr = textError(a.name ?? '', a.kind === 'volunteer' ? 'Your name' : 'Organization name', LIMITS.name, true);
       need(!nameErr, nameErr, 'name');
+      need(a.kind === 'volunteer' || ctx.nonprofitSignupsOpen, "New nonprofit accounts aren't open yet. The pilot team is still setting up review, support, and policies.", 'kind');
       if (a.kind === 'volunteer') {
         need(ctx.redeemInvite, 'Invites are not available here.', 'inviteCode');
         need(clean(a.inviteCode), 'Enter your invite code.', 'inviteCode');
@@ -395,7 +406,7 @@ export async function runCore(db: Db, ctx: Ctx, action?: ActionInput, selectedPo
           pair.data.project = {
             id: pair.id, posting: structuredClone(role), volunteer: structuredClone(v), nonprofit: structuredClone(org),
             status: 'pending', createdAt: iso(), pendingUntil: new Date(now + LIMITS.decisionHours * 3600_000).toISOString(),
-            agreement: draftAgreement(role, now), agreementHistory: [], acceptances: [], agreedVersion: null,
+            agreement: demoAgreement(role), agreementHistory: [], acceptances: [], agreedVersion: null,
             startDate: '', endDate: '', kickoff: { contact: false, scope: false, inputs: false, access: false },
             messages: [], deliverables: [], links: [], team: [], hours: [], checkInDate: '', checkInAgenda: '', closing: {},
           };
@@ -461,6 +472,16 @@ export async function runCore(db: Db, ctx: Ctx, action?: ActionInput, selectedPo
     const them = otherId(pair, side);
     const themName = (side === 'volunteer' ? p.nonprofit : p.volunteer).name;
     const stillTogether = () => need(!blockedBetween(self.id, them), 'This project is closed to new activity.');
+    const activate = () => {
+      p.agreedVersion = p.agreement.version;
+      pair.status = 'active';
+      p.startDate = p.agreement.proposedStart;
+      p.endDate = addDays(p.startDate, p.agreement.weeks * 7);
+      touchPair(pair);
+      refreshRole(pair.postingId);
+      for (const id of [pair.volunteerId, orgOf(pair)]) notify(id, 'confirmed', `"${p.agreement.title}" is confirmed. It starts ${p.startDate}.`, { projectId: p.id });
+    };
+    const demoNote = (text: string) => p.messages.push({ id: ctx.uuid(), senderId: 'system', senderName: 'probono demo', text, createdAt: iso(), system: true });
 
     switch (a.action) {
       case 'pass': {
@@ -521,16 +542,8 @@ export async function runCore(db: Db, ctx: Ctx, action?: ActionInput, selectedPo
           notify(them, 'other_confirmed', `${self.name} accepted version ${p.agreement.version} of "${p.agreement.title}". It's your turn.`, { projectId: p.id });
           return { ok: true, message: "You've accepted. We'll let them know it's their turn." };
         }
+        if (pair.status === 'pending') { activate(); return { ok: true, message: 'Project confirmed' }; }
         p.agreedVersion = p.agreement.version;
-        if (pair.status === 'pending') {
-          pair.status = 'active';
-          p.startDate = p.agreement.proposedStart;
-          p.endDate = addDays(p.startDate, p.agreement.weeks * 7);
-          touchPair(pair);
-          refreshRole(pair.postingId);
-          for (const id of [pair.volunteerId, orgOf(pair)]) notify(id, 'confirmed', `"${p.agreement.title}" is confirmed. It starts ${p.startDate}.`, { projectId: p.id });
-          return { ok: true, message: 'Project confirmed' };
-        }
         p.endDate = addDays(p.startDate, p.agreement.weeks * 7);
         p.messages.push({ id: ctx.uuid(), senderId: 'system', senderName: 'probono', text: `Both sides accepted version ${p.agreement.version} of the agreement.`, createdAt: iso(), system: true });
         touchPair(pair);
@@ -581,15 +594,34 @@ export async function runCore(db: Db, ctx: Ctx, action?: ActionInput, selectedPo
         notify(them, 'completion_requested', `${self.name} marked "${p.agreement.title}" complete. Add your closing note to finish it.`, { projectId: p.id });
         return { ok: true, message: 'Closing note saved. The project completes when they add theirs.' };
       }
-      case 'demo_advance_week': {
+      case 'demo_other_side': {
+        // Demo only: plays the other side's next step so one visitor can see the whole story.
+        // Every simulated step is written into the project as a labeled demo note.
         need(ctx.demo, 'Only available in the demo.');
-        need(pair.status === 'active' || pair.status === 'completion_pending', 'Confirm the project first.');
-        p.startDate = addDays(p.startDate, -7);
-        p.endDate = addDays(p.endDate, -7);
-        p.createdAt = new Date(Date.parse(p.createdAt) - 7 * DAY).toISOString();
-        for (const h of p.hours) h.date = addDays(h.date, -7);
-        touchPair(pair);
-        return { ok: true, message: 'Moved ahead one week.' };
+        if (pair.status === 'pending') {
+          need(!accepted(p, otherSide), `${themName} has already accepted this version.`);
+          need(!Object.keys(agreementErrors(p.agreement, minStartFor(p.pendingUntil))).length, 'The agreement needs every required field before anyone can accept it.');
+          p.acceptances.push({ side: otherSide, actorId: them, actorName: themName, version: p.agreement.version, at: iso(), confidentiality: true, licensing: true });
+          demoNote(`Demo: ${themName} accepting version ${p.agreement.version} was simulated.`);
+          if (!accepted(p, side)) { touchPair(pair); return { ok: true, message: `Simulated: ${themName} accepted version ${p.agreement.version}. Your turn.` }; }
+          activate();
+          p.messages.push({ id: ctx.uuid(), senderId: them, senderName: themName, createdAt: iso(),
+            text: side === 'volunteer' ? "Thanks for taking this on! I'll send last year's spending export before our first call." : "Looking forward to it. I'll read the export before our first call." });
+          p.deliverables.push({ id: ctx.uuid(), text: 'Draft budget categories from last year\'s spending', done: false });
+          p.checkInDate = `${p.startDate}T15:00:00.000Z`;
+          p.checkInAgenda = 'Kickoff: walk through last year\'s spending together';
+          touchPair(pair);
+          return { ok: true, message: 'Project confirmed' };
+        }
+        if (pair.status === 'completion_pending' && !p.closing[otherSide]) {
+          p.closing[otherSide] = otherSide === 'nonprofit'
+            ? { note: 'We have a budget we can actually keep up, and the board approved it. Thank you.', at: iso(), publish: true, unblocked: 'yes', hoursOk: true }
+            : { note: 'A prepared, generous team. It was a pleasure to work together.', at: iso(), publish: true };
+          demoNote(`Demo: ${themName}'s closing note was simulated.`);
+          finish(pair);
+          return { ok: true, message: 'Project complete.' };
+        }
+        throw new AppError(`There's nothing for ${themName} to do right now.`);
       }
     }
 
@@ -723,7 +755,7 @@ export async function runCore(db: Db, ctx: Ctx, action?: ActionInput, selectedPo
   function buildState(): AppState {
     const empty: AppState = {
       profile: null, needsOnboarding: true, postings: [], prospects: [], capacity: { full: false, reason: '' }, reviewGate: null,
-      projects: [], notice: null, notifications: [], unread: 0, blocked: [], demo: ctx.demo,
+      projects: [], notice: null, notifications: [], unread: 0, blocked: [], demo: ctx.demo, now: iso(),
     };
     if (!me) return empty;
     const viewer = me;
@@ -763,7 +795,8 @@ export async function runCore(db: Db, ctx: Ctx, action?: ActionInput, selectedPo
     const unacked = (r: Pair) => r.data.acknowledgements[viewer.id] !== r.status;
     const n1 = mine.find((r) => r.status === 'pending' && unacked(r));
     const n2 = mine.find((r) => r.status === 'active' && unacked(r) && r.data.acknowledgements[viewer.id] !== 'active');
-    const n3 = mine.find((r) => (ENDED as string[]).includes(r.status) && r.status !== 'passed' && unacked(r) && r.data.acknowledgements[viewer.id] !== undefined);
+    // No pop-up for an ending you caused yourself.
+    const n3 = mine.find((r) => (ENDED as string[]).includes(r.status) && r.status !== 'passed' && unacked(r) && r.data.acknowledgements[viewer.id] !== undefined && r.data.project?.endedBy !== viewer.id);
     const n3b = mine.find((r) => r.status === 'passed' && r.data.project && unacked(r) && r.data.project.endedBy !== viewer.id);
     const notice: AppState['notice'] = n1 ? { kind: 'mutual', projectId: n1.id } : n2 ? { kind: 'confirmed', projectId: n2.id }
       : n3 ? { kind: 'ended', projectId: n3.id } : n3b ? { kind: 'ended', projectId: n3b.id } : null;
@@ -775,7 +808,7 @@ export async function runCore(db: Db, ctx: Ctx, action?: ActionInput, selectedPo
       postings: myRoles,
       prospects,
       capacity: busyPair
-        ? { full: true, projectId: busyPair.id, reason: np ? 'This posting has a project in progress. You can browse, and showing interest opens again when it ends.' : 'You have a project in progress. You can browse, and showing interest opens again when it ends.' }
+        ? { full: true, projectId: busyPair.id, reason: np ? 'This posting already has a proposed or active project. Showing interest opens again when it ends.' : 'You already have a proposed or active project. Showing interest opens again when it ends.' }
         : { full: false, reason: '' },
       reviewGate: np ? { waiting, status: reviewStatus! } : null,
       projects: ordered.map(hydrate),
@@ -784,6 +817,7 @@ export async function runCore(db: Db, ctx: Ctx, action?: ActionInput, selectedPo
       unread: myNotes.filter((n) => !n.readAt).length,
       blocked: db.blocks.filter((b) => b.blockerId === viewer.id).map((b) => ({ id: b.blockedId, name: people.get(b.blockedId)?.name ?? 'Deleted account' })),
       demo: ctx.demo,
+      now: iso(),
     };
   }
 }

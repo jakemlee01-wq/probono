@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'wouter';
 import type { Kind } from '@shared/types';
 import { Btn, Field, inputCls } from '@/components/bits';
-import { call } from '@/lib/api';
+import { call, useConfig } from '@/lib/api';
 import { CheckEmail, Frame, SignUpForm } from './auth';
 
 type Saved = { role: Kind; code: string };
@@ -62,7 +62,8 @@ export function JoinVolunteer() {
           <Btn className="w-full" disabled={busy} onClick={check}>{busy ? 'Checking…' : 'Check invite'}</Btn>
           <details className="text-sm text-plum/75">
             <summary className="min-h-11 cursor-pointer py-3 font-semibold">I don't have an invite</summary>
-            <p>There's no public waitlist yet. Invites come from the people running the pilot. If you know someone involved, ask them for one.</p>
+            <p>Volunteer spots are by invitation while the pilot is small. There's no waitlist or sign-up form, and invites come from the people running the pilot.</p>
+            <p className="mt-2">You can still see exactly how it works in the demo.</p>
           </details>
         </div>
       ) : (
@@ -77,7 +78,20 @@ export function JoinVolunteer() {
 
 export function JoinNonprofit() {
   const [sent, setSent] = useState('');
+  const cfg = useConfig();
   if (sent) return <CheckEmail email={sent} />;
+  if (!cfg.data?.nonprofitSignupsOpen) {
+    return (
+      <Frame title="Nonprofit access" sub={<p>For Twin Cities nonprofits that want help with accounting or finance work: budgets, reporting, systems, month-end, grant tracking.</p>}>
+        <div className="space-y-3 text-sm">
+          <p className="font-semibold">New nonprofit accounts aren't open yet.</p>
+          <p>Before taking on organizations, the pilot team still needs to set up organization review, a support contact, and published policies. Until then, new registrations are paused rather than left waiting with no one to answer.</p>
+          <p>Nonprofits already in the pilot can <Link href="/sign-in" className="underline underline-offset-4">sign in</Link> as usual.</p>
+          <p>When it opens, joining will let you post a project. Volunteers see it only after the pilot team reviews your organization.</p>
+        </div>
+      </Frame>
+    );
+  }
   return (
     <Frame title="Create a nonprofit account" sub={
       <div className="space-y-2 text-sm">

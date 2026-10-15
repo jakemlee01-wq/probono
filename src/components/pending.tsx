@@ -30,7 +30,8 @@ export function Pending({ project, me }: { project: Project; me: Profile }) {
   return (
     <div className="mx-auto w-full max-w-lg space-y-5 text-plum">
       <div>
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-plum/65">Proposed project · {status.label}</p>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-plum/65">{status.label}</p>
+        <p className="mt-1 text-sm text-plum/80">Next: {status.next}.</p>
         <div className="mt-3 flex items-center gap-4">
           <Tile name={other.name} alt="" src={other.photos[0] ? photoUrl(other.photos[0]) : undefined} className="h-20 w-20 shrink-0 rounded-2xl text-3xl" />
           <div className="min-w-0">
@@ -61,7 +62,7 @@ export function Pending({ project, me }: { project: Project; me: Profile }) {
           <h2 className="font-serif text-2xl">Work agreement</h2>
           <span className="shrink-0 rounded-full bg-plum/10 px-2.5 py-1 text-xs font-semibold">Version {a.version}</span>
         </div>
-        <p className="mt-1 text-xs text-plum/65">{a.editedBy === 'system' ? 'Started from the posting.' : `Last edited by ${a.editedByName}, ${fmtInstant(a.editedAt)}.`} Both of you see this same version.</p>
+        <p className="mt-1 text-xs text-plum/65">{a.editedBy === 'system' ? (a.editedByName === 'Demo example' ? 'Prepared in advance as a demo example. Real projects start from the posting and both sides fill it in.' : 'Started from the posting.') : `Last edited by ${a.editedByName}, ${fmtInstant(a.editedAt)}.`} Both of you see this same version.</p>
         {gaps.length > 0 && (
           <p className="mt-3 rounded-2xl bg-apricot/25 p-3 text-sm" role="status">
             {gaps.length} {gaps.length === 1 ? 'thing' : 'things'} still needed before anyone can accept: {gaps.map((k) => AGREEMENT_LABELS[k as keyof typeof AGREEMENT_LABELS] ?? k).join(', ')}.
@@ -79,7 +80,7 @@ export function Pending({ project, me }: { project: Project; me: Profile }) {
 
       <div className="pb-safe sticky bottom-16 z-20 -mx-4 flex gap-3 border-t border-plum/15 bg-cream px-4 py-3">
         <Btn v="ghost" className="flex-1" disabled={pending} onClick={() => setPass(true)}>Pass</Btn>
-        <Btn className="flex-1" disabled={pending || mine} onClick={() => (gaps.length ? setMissing(true) : setAccept(true))}>{mine ? 'Waiting for them' : 'Review and accept'}</Btn>
+        <Btn className="flex-1" disabled={pending || mine} onClick={() => (gaps.length ? setMissing(true) : setAccept(true))}>{mine ? `Waiting for ${other.name.split(' ')[0]}` : 'Review agreement'}</Btn>
       </div>
       {edit && <AgreementEditor project={project} onClose={() => setEdit(false)} />}
       {accept && <AcceptSheet project={project} side={me.kind} onClose={() => setAccept(false)} />}

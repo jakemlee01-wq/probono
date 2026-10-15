@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, FastForward, Link2, Trash2 } from 'lucide-react';
+import { AlertTriangle, Link2, Trash2 } from 'lucide-react';
 import type { Profile, Project } from '@shared/types';
 import { LIMITS, pilotDate, textError } from '@shared/rules';
 import { Btn, Field, Modal, inputCls } from './bits';
@@ -8,6 +8,7 @@ import { AcceptSheet, AgreementEditor, AgreementView, ExportButton } from './agr
 import { SafetyButton } from './safety';
 import { useAct } from '@/lib/act';
 import { fmtDate, fmtInstant, projectLabel } from '@/lib/util';
+import { appNow } from '@/lib/demo-store';
 
 const card = 'rounded-3xl border border-plum/15 bg-white/50 p-5';
 const h = 'mb-3 font-serif text-2xl';
@@ -23,9 +24,10 @@ export function Workspace({ project, me, demo }: { project: Project; me: Profile
   return (
     <div className="mx-auto w-full max-w-lg space-y-5 text-plum">
       <div className="-mx-4 -mt-2 rounded-b-[2rem] bg-plum px-5 pb-5 pt-3 text-cream">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-cream/70">Partnership · {status.label}</p>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-cream/70">{status.label}</p>
         <h1 className="mt-1 font-serif text-4xl leading-none">{other.name}</h1>
         <p className="mt-1 text-sm text-cream/80">{project.agreement.title} · {fmtDate(project.startDate)} to {fmtDate(project.endDate)}</p>
+        <p className="mt-2 text-sm font-semibold">Next: {status.next}.</p>
         <div className="mt-4">
           <div className="mb-1.5 flex justify-between text-xs font-semibold"><span>{week === 0 ? `Starts ${fmtDate(project.startDate, 'MMM d')}` : `Week ${week} of ${total}`}</span><span>{project.finalWeek ? 'Final week' : ''}</span></div>
           <div className="flex gap-1" aria-hidden>{Array.from({ length: total }, (_, k) => <span key={k} className={`h-1.5 flex-1 rounded-full ${k < week ? 'bg-cream' : 'bg-cream/25'}`} />)}</div>
@@ -68,7 +70,7 @@ function ProjectTab({ project, me, demo }: { project: Project; me: Profile; demo
   const { run, pending } = useAct();
   const vol = me.kind === 'volunteer';
   const commit = project.agreement.hoursPerWeek;
-  const today = pilotDate(Date.now());
+  const today = pilotDate(appNow());
   const [hrs, setHrs] = useState('');
   const [date, setDate] = useState(today);
   const [note, setNote] = useState('');
@@ -168,14 +170,6 @@ function ProjectTab({ project, me, demo }: { project: Project; me: Profile; demo
         </div>
       </section>
 
-      {demo && (
-        <section className="rounded-3xl border border-dashed border-plum/35 p-4 text-sm">
-          <p className="font-semibold">Demo only</p>
-          <p className="mt-1 text-plum/70">Move the project forward a week to try logging hours and closing without waiting. This only changes your demo.</p>
-          <Btn v="ghost" className="mt-3" disabled={pending} onClick={() => run({ action: 'demo_advance_week', projectId: project.id })}><FastForward size={16} aria-hidden />Skip ahead a week</Btn>
-        </section>
-      )}
-
       <button onClick={() => setStop(true)} className="min-h-11 w-full py-2 text-sm text-plum/70 underline underline-offset-4">Stop this project</button>
       {stop && <StopSheet project={project} onClose={() => setStop(false)} />}
       {accept && <AcceptSheet project={project} side={me.kind} onClose={() => setAccept(false)} />}
@@ -230,12 +224,13 @@ function Completion({ project, me }: { project: Project; me: Profile }) {
       <p className="text-sm text-plum/80">
         {project.status === 'completion_pending'
           ? mine ? 'Your closing note is in. The project completes when they add theirs.' : 'They marked the work complete. Add your closing note to finish the project.'
-          : 'When the agreed deliverables are handed over, either of you can mark the project complete. It finishes once both of you add a closing note.'}
+          : 'When the agreed deliverables are handed over, add your closing note. The project finishes only after both of you have added one.'}
       </p>
       {theirs && <p className="mt-2 text-xs text-plum/65">Their note is in. You'll see it when the project completes.</p>}
-      <Btn v={project.status === 'completion_pending' && !mine ? 'primary' : 'ghost'} className="mt-3" onClick={() => setOpen(true)}>{mine ? 'Edit my closing note' : 'Mark complete'}</Btn>
+      <Btn v={project.status === 'completion_pending' && !mine ? 'primary' : 'ghost'} className="mt-3" onClick={() => setOpen(true)}>{mine ? 'Edit my closing note' : 'Add closing note'}</Btn>
       {open && (
-        <Modal title="Close out the project" onClose={() => setOpen(false)}>
+        <Modal title="Your closing note" onClose={() => setOpen(false)}>
+          <p className="mb-4 text-sm text-plum/75">This records your side of the hand-off. {theirs ? 'Theirs is already in, so saving this completes the project.' : 'The project completes when the other side adds theirs too.'}</p>
           <div className="space-y-4">
             {!vol && (
               <>
@@ -304,13 +299,13 @@ function People({ project }: { project: Project }) {
             <input aria-label="Role" className={inputCls} placeholder="Role" value={m.role} onChange={(e) => setM({ ...m, role: e.target.value })} />
             <input aria-label="Email" name="email" type="email" className={inputCls} placeholder="Email" value={m.email} onChange={(e) => setM({ ...m, email: e.target.value })} />
           </div>
-          <p className="text-xs text-plum/60">Visible only to the two of you on this project.</p>
+          <p className="text-xs text-plum/65">This saves a private contact note, visible only to the two of you. It doesn't invite the person or give them access to anything.</p>
           <Btn v="ghost" disabled={pending || !m.name.trim()} onClick={() => run({ action: 'add_member', projectId: project.id, member: { id: '', ...m } }, { done: () => setM({ name: '', role: '', email: '' }) })}>Add person</Btn>
         </div>
       </section>
       <section className={card}>
         <h2 className={h}>Systems and links</h2>
-        <p className="mb-3 text-xs text-plum/65">Point to where the work lives. Files stay in your own systems; probono only keeps the links. Never paste passwords here.</p>
+        <p className="mb-3 text-xs text-plum/65">Point to where the work lives. Files stay in your own systems; probono only keeps the link. Adding a link here doesn't give anyone permission to open it. Never paste passwords.</p>
         <ul className="space-y-2">
           {project.links.length === 0 && <li className="text-sm text-plum/60">No links yet.</li>}
           {project.links.map((k) => (

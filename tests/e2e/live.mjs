@@ -99,7 +99,7 @@ ok(await v2.getByText('That invite has already been used.').first().isVisible(),
 
 await vol.getByRole('button', { name: 'Discover' }).click();
 await wait(vol, 800);
-ok(await vol.getByRole('heading', { name: 'Lake Street Tutors' }).isVisible(), 'reviewed posting visible to volunteer');
+ok(await vol.getByRole('heading', { name: 'Our first annual budget' }).isVisible(), 'reviewed posting visible to volunteer');
 ok(await vol.getByText('Organization reviewed').isVisible(), 'badge reflects backend review');
 await shot(vol, 'live-05-volunteer-discover');
 await vol.getByRole('button', { name: 'Show interest' }).click();
@@ -122,12 +122,12 @@ await org.getByRole('button', { name: 'Edit agreement' }).click();
 for (const [k, v] of Object.entries({ outcome: 'A budget the board can approve', nonprofitContact: 'Ana, director', deliverables: 'A budget workbook', acceptance: 'Board approves it', inScope: 'Annual budget', exclusions: 'Payroll', inputs: 'Last year actuals', checkInPlan: 'Weekly call' })) await dialog(org).locator(`[name="${k}"]`).fill(v);
 await dialog(org).getByRole('button', { name: 'Save agreement' }).click();
 await wait(org, 800);
-await org.getByRole('button', { name: 'Review and accept' }).click();
+await org.getByRole('button', { name: 'Review agreement' }).click();
 await dialog(org).locator('[name="confidentiality"]').check();
 await dialog(org).locator('[name="licensing"]').check();
 await dialog(org).getByRole('button', { name: 'Accept version 2' }).click();
 await wait(org, 800);
-ok(await org.getByRole('button', { name: 'Waiting for them' }).isVisible(), 'nonprofit-first acceptance recorded');
+ok(await org.getByRole('button', { name: 'Waiting for Dana' }).isVisible(), 'nonprofit-first acceptance recorded');
 await org.reload();
 await wait(org, 1000);
 ok(await org.getByText(/accepted version 2/).first().isVisible(), 'state survives reload');
@@ -143,7 +143,7 @@ await vol.getByRole('textbox', { name: 'Message' }).fill('<img src=x onerror=ale
 await vol.getByRole('button', { name: 'Send message' }).click();
 await wait(vol, 800);
 ok(await vol.getByText('<img src=x onerror=alert(1)> hello').isVisible(), 'chat shows HTML as text');
-await vol.getByRole('button', { name: 'Review and accept' }).click();
+await vol.getByRole('button', { name: 'Review agreement' }).click();
 await dialog(vol).locator('[name="confidentiality"]').check();
 await dialog(vol).locator('[name="licensing"]').check();
 await dialog(vol).getByRole('button', { name: 'Accept version 2' }).click();
@@ -214,7 +214,7 @@ for (const [w, h] of sizes) {
   const q = await as(v3, w, h);
   await q.goto(base + '#/app');
   await wait(q, 1000);
-  const name = q.getByRole('heading', { name: 'Lake Street Tutors' });
+  const name = q.getByRole('heading', { name: 'Our first annual budget' });
   const bar = q.getByRole('button', { name: 'Show interest' });
   const nb = await name.boundingBox(), bb = await bar.boundingBox();
   ok(nb && bb && nb.y + nb.height <= bb.y && nb.y + nb.height <= h, `card name visible above the bar at ${w}x${h}`);

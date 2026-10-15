@@ -200,11 +200,13 @@ export type AppState = {
   unread: number;
   blocked: { id: string; name: string }[];
   demo: boolean;
+  now: string; // the engine's clock (the demo can run ahead of real time)
 };
 
 export type AppConfig = {
   supportUrl: string | null; // set by the operator; null means support isn't configured
   policiesPublished: boolean;
+  nonprofitSignupsOpen: boolean; // false until the operator opens enrollment
 };
 
 export type ActionName =
@@ -212,7 +214,7 @@ export type ActionName =
   | 'interest' | 'not_now' | 'edit_agreement' | 'confirm' | 'pass' | 'message' | 'log_hours'
   | 'add_deliverable' | 'toggle_deliverable' | 'kickoff' | 'check_in' | 'add_link' | 'remove_link'
   | 'add_member' | 'remove_member' | 'complete' | 'end_early' | 'acknowledge'
-  | 'report' | 'block' | 'unblock' | 'read_notifications' | 'demo_advance_week';
+  | 'report' | 'block' | 'unblock' | 'read_notifications' | 'demo_other_side';
 
 export type ActionInput = {
   action: ActionName;

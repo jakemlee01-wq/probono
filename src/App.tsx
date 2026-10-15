@@ -21,9 +21,10 @@ const useHashPath = (): ReturnType<typeof useHashLocation> => {
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true } } });
 
 function Home() {
-  const { session, demo, ready } = useSession();
+  const { session, ready } = useSession();
   if (!ready) return <div className="min-h-[100dvh] bg-plum" />;
-  return session || demo ? <Redirect to="/app" /> : <Landing />;
+  // Signed-in members go to the app. Demo visitors see the landing page with Resume or Start over.
+  return session ? <Redirect to="/app" /> : <Landing />;
 }
 
 function Routes() {

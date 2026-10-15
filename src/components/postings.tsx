@@ -8,7 +8,7 @@ import { PromptsEditor, TermsEditor } from './profile-editor';
 import { useAct } from '@/lib/act';
 import { POSTING_LABEL } from '@/lib/util';
 
-export function Postings({ state, me, onWork }: { state: AppState; me: Profile; onWork: (id: string) => void }) {
+export function Postings({ state, me, onWork, onOpenProject }: { state: AppState; me: Profile; onWork: (id: string) => void; onOpenProject: (id: string) => void }) {
   const [edit, setEdit] = useState<Posting | null>(null);
   const [preview, setPreview] = useState<Posting | null>(null);
   const blank = (): Posting => ({ id: '', orgId: me.id, title: '', skills: [], terms: me.terms, prompts: { first: me.prompts.first, second: '', third: '' }, status: 'Open', notesLeft: LIMITS.interestNotesPerPosting });
@@ -31,7 +31,12 @@ export function Postings({ state, me, onWork }: { state: AppState; me: Profile; 
           <div className="mt-4 flex flex-wrap gap-2">
             {p.status === 'Open' && <Btn v="ghost" className="!px-4 !py-2" onClick={() => setEdit(p)}>Edit</Btn>}
             <Btn v="ghost" className="!px-4 !py-2" onClick={() => setPreview(p)}>Preview as a volunteer</Btn>
-            <Btn className="!px-4 !py-2" onClick={() => onWork(p.id)}>View details</Btn>
+            {(() => {
+              const live = state.projects.find((x) => x.posting.id === p.id && ['pending', 'active', 'completion_pending'].includes(x.status));
+              return live
+                ? <Btn className="!px-4 !py-2" onClick={() => onOpenProject(live.id)}>Open project</Btn>
+                : p.status === 'Open' ? <Btn className="!px-4 !py-2" onClick={() => onWork(p.id)}>Find volunteers</Btn> : null;
+            })()}
           </div>
           {p.status !== 'Open' && p.status !== 'Complete' && <p className="mt-2 text-xs text-plum/60">Editing is locked while a project is proposed or in progress. The agreed scope lives on the project.</p>}
         </div>
@@ -73,7 +78,7 @@ function PostingForm({ initial, onClose }: { initial: Posting; onClose: () => vo
           <Chips label="Skills needed" options={SKILL_OPTIONS} value={d.skills} onChange={(skills) => setD({ ...d, skills })} />
           {shown.skills && <p className="mt-1 text-xs font-semibold text-[#8a2f25]">{shown.skills}</p>}
         </div>
-        <TermsEditor value={d.terms} onChange={(terms) => setD({ ...d, terms })} errors={shown} />
+        <TermsEditor kind="posting" value={d.terms} onChange={(terms) => setD({ ...d, terms })} errors={shown} />
         <PromptsEditor kind="nonprofit" value={d.prompts} onChange={(prompts) => setD({ ...d, prompts })} errors={shown} />
         {!isNew && <p className="text-xs text-plum/65">Volunteers who already showed interest stay attached after you edit.</p>}
         <p className="text-xs text-plum/70" aria-live="polite">{missing.length ? `Add ${missing.join(' and ')} to publish.` : 'Ready to publish.'}</p>

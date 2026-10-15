@@ -15,23 +15,46 @@ import { errMsg, photoUrl } from '@/lib/util';
 
 const num = (v: string) => (v === '' ? ('' as unknown as number) : Number(v));
 
-export function TermsEditor({ value, onChange, errors = {} }: { value: Terms; onChange: (t: Terms) => void; errors?: Errors }) {
-  const set = (k: keyof Terms, v: string | number) => onChange({ ...value, [k]: v } as Terms);
-  const n = (k: keyof Terms, label: string, min: number, max: number) => (
-    <Field label={label} name={k} error={errors[k]}>
-      {(f) => <input {...f} name={k} type="number" inputMode="numeric" min={min} max={max} step={1} className={inputCls} value={value[k] as number} onChange={(e) => set(k, num(e.target.value))} />}
+// Volunteers set limits; a posting states one project. The engine shows a posting to a volunteer only
+// when it fits inside their limits.
+export function TermsEditor({ value, onChange, errors = {}, kind = 'volunteer' }: { value: Terms; onChange: (t: Terms) => void; errors?: Errors; kind?: 'volunteer' | 'posting' }) {
+  const posting = kind === 'posting';
+  const set = (patch: Partial<Terms>) => {
+    const t = { ...value, ...patch } as Terms;
+    if (posting) {
+      // A posting is one fixed length; the range fields mirror it so validation and matching agree.
+      t.minWeeks = t.maxWeeks = t.weeks;
+      const start = /^\d{4}-\d{2}-\d{2}$/.test(t.startDate) ? t.startDate : '';
+      if (start && Number(t.weeks) > 0) { const d = new Date(`${start}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + Number(t.weeks) * 7 + 30); t.availableUntil = d.toISOString().slice(0, 10); }
+    } else {
+      t.weeks = Number(t.minWeeks) || t.weeks;
+    }
+    onChange(t);
+  };
+  const n = (k: keyof Terms, label: string, hint: string, min: number, max: number) => (
+    <Field label={label} name={k} error={errors[k]} hint={hint}>
+      {(f) => <input {...f} name={k} type="number" inputMode="numeric" min={min} max={max} step={1} className={inputCls} value={value[k] as number} onChange={(e) => set({ [k]: num(e.target.value) } as Partial<Terms>)} />}
     </Field>
   );
+  const d = (k: 'startDate' | 'availableUntil', label: string, hint: string) => (
+    <Field label={label} name={k} error={errors[k]} hint={hint}>{(f) => <input {...f} name={k} type="date" className={inputCls} value={value[k]?.slice(0, 10) || ''} onChange={(e) => set({ [k]: e.target.value } as Partial<Terms>)} />}</Field>
+  );
   return (
-    <div className="grid grid-cols-2 gap-3">
-      {n('hoursPerWeek', 'Hours per week', 1, 40)}{n('weeks', 'Weeks', 1, 52)}{n('minWeeks', 'Fewest weeks', 1, 52)}{n('maxWeeks', 'Most weeks', 1, 52)}
-      <Field label="Start date" name="startDate" error={errors.startDate}>{(f) => <input {...f} name="startDate" type="date" className={inputCls} value={value.startDate?.slice(0, 10) || ''} onChange={(e) => set('startDate', e.target.value)} />}</Field>
-      <Field label="Available until" name="availableUntil" error={errors.availableUntil}>{(f) => <input {...f} name="availableUntil" type="date" className={inputCls} value={value.availableUntil?.slice(0, 10) || ''} onChange={(e) => set('availableUntil', e.target.value)} />}</Field>
-      <div className="col-span-2">
-        <Field label="Format" name="format" error={errors.format}>
-          {(f) => <select {...f} name="format" className={inputCls} value={value.format} onChange={(e) => set('format', e.target.value)}>{FORMATS.map((x) => <option key={x}>{x}</option>)}</select>}
-        </Field>
-      </div>
+    <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
+      {posting ? <>
+        {n('hoursPerWeek', 'Hours a week', 'What the work needs, 1 to 40.', 1, 40)}
+        {n('weeks', 'Project length (weeks)', 'From start to hand-off.', 1, 52)}
+        {d('startDate', 'Proposed start', 'Agreed for real in the work agreement.')}
+      </> : <>
+        {n('hoursPerWeek', 'Most hours a week', "You'll only see postings that need this or less.", 1, 40)}
+        {n('minWeeks', 'Shortest project', 'In weeks.', 1, 52)}
+        {n('maxWeeks', 'Longest project', 'In weeks.', 1, 52)}
+        {d('startDate', 'Available from', 'Postings starting before this are hidden.')}
+        {d('availableUntil', 'Available until', 'Projects must end by this date.')}
+      </>}
+      <Field label="Format" name="format" error={errors.format}>
+        {(f) => <select {...f} name="format" className={inputCls} value={value.format} onChange={(e) => set({ format: e.target.value as Terms['format'] })}>{FORMATS.map((x) => <option key={x}>{x}</option>)}</select>}
+      </Field>
     </div>
   );
 }
@@ -149,11 +172,13 @@ export function ProfileEditor({ profile, state }: { profile: Profile; state: App
         <h2 className="pt-2 font-serif text-2xl">Causes</h2>
         <Chips label="Causes" options={CAUSE_OPTIONS} value={d.causes} onChange={(causes) => setD({ ...d, causes })} />
       </section>
-      <section>
-        <h2 className="mb-1 font-serif text-2xl">{vol ? 'Your terms' : 'Usual terms'}</h2>
-        {vol && <p className="mb-3 text-sm text-plum/70">Only postings that fit these show up for you.</p>}
-        <TermsEditor value={d.terms} onChange={(terms) => setD({ ...d, terms })} errors={shown} />
-      </section>
+      {vol && (
+        <section>
+          <h2 className="mb-1 font-serif text-2xl">What you can take on</h2>
+          <p className="mb-3 text-sm text-plum/70">These are limits for matching. A posting shows up for you only if its hours, length, start date, and format fit inside them.</p>
+          <TermsEditor value={d.terms} onChange={(terms) => setD({ ...d, terms })} errors={shown} />
+        </section>
+      )}
       <section>
         <h2 className="mb-3 font-serif text-2xl">In your words</h2>
         <PromptsEditor kind={d.kind} value={d.prompts} onChange={(prompts) => setD({ ...d, prompts })} errors={shown} />

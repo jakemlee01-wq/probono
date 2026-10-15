@@ -8,6 +8,8 @@ import type { ActionInput, ActionResult, AppState, Posting, Profile } from '../_
 
 export { AppError };
 export const LOCK_ID = 772601;
+// The operator opens nonprofit self-registration with the function secret NONPROFIT_SIGNUPS=open.
+export const nonprofitSignupsOpen = () => (Deno.env.get('NONPROFIT_SIGNUPS') ?? '') === 'open';
 
 // Rows left over from the first version's shared, server-side demo. They are never shown to
 // real users and are never edited by the engine. docs/operations.md explains how to remove them.
@@ -125,6 +127,7 @@ export async function runEngine(tx: Tx, user: User, photoPrefix: string, action?
   const ctx: Ctx = {
     userId: user.id, now: Date.now(), demo: false, uuid: () => crypto.randomUUID(), photoPrefix,
     redeemInvite: (code) => redeemInvite(tx, user, code),
+    nonprofitSignupsOpen: nonprofitSignupsOpen(),
   };
   const { result, changes } = await runCore(db, ctx, action, selectedPostingId);
   await persist(tx, db, changes);

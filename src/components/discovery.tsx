@@ -26,7 +26,7 @@ export function Discovery({ state, me, postingId, goProfile, goProject }: { stat
   const list = state.prospects;
   const p = list[full ? browse % Math.max(1, list.length) : 0];
   if (!p && full)
-    return <Empty title="Project in progress" body={state.capacity.reason} cta="Go to project" onCta={() => goProject(state.capacity.projectId!)} />;
+    return <Empty title="Nothing else to browse right now" body={state.capacity.reason} cta="Go to project" onCta={() => goProject(state.capacity.projectId!)} />;
   if (!p)
     return <Empty title={isNp ? 'No matching volunteers yet' : 'No matching projects yet'} body={isNp ? "Nobody in the pilot fits this posting right now. Widening the skills or terms can help." : "Nothing in the pilot fits your skills and terms right now. New postings show up here as they're reviewed."} cta={isNp ? 'Edit postings' : 'Review my terms'} onCta={goProfile} />;
 
@@ -48,12 +48,12 @@ export function Discovery({ state, me, postingId, goProfile, goProject }: { stat
         <HowItWorks kind={me.kind} tone="dark" />
         {isNp && posting && <span className="text-xs text-white/75">{notesLeft} interest message{notesLeft === 1 ? '' : 's'} remaining for this posting</span>}
       </div>
-      <ProspectCard key={p.profile.id + p.posting.id} prospect={p} viewer={isNp ? 'nonprofit' : 'volunteer'} />
+      <ProspectCard key={p.profile.id + p.posting.id} prospect={p} viewer={isNp ? 'nonprofit' : 'volunteer'} readOnly={full ? state.capacity.reason : undefined} />
       {/* In the page flow and sticky, so it reserves its own space and never covers the card. */}
       <div className="pb-safe sticky bottom-16 z-20 -mx-4 mt-3 bg-gradient-to-t from-plum via-plum to-plum/0 px-4 pb-3 pt-4">
         {full ? (
           <div className="mx-auto max-w-md rounded-3xl border border-white/25 bg-plum2 p-3 text-center">
-            <p className="text-xs text-white/80">{state.capacity.reason}</p>
+            <p className="text-xs text-white/85">You're browsing. {state.capacity.reason}</p>
             <div className="mt-2 flex gap-2">
               <Btn v="ghost" className="flex-1 text-white" disabled={list.length < 2} onClick={() => setBrowse((b) => b + 1)}>Next</Btn>
               <Btn v="light" className="flex-1" onClick={() => goProject(state.capacity.projectId!)}>Go to project</Btn>
