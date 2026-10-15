@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ActionInput, ActionResult, AppConfig, AppState } from '@shared/types';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from './supabase';
-import { demo, useDemoPersona } from './demo-store';
+import { demo, useDemoPersona, useDemoVersion } from './demo-store';
 
 const BASE = `${SUPABASE_URL}/functions/v1/api`;
 
@@ -27,11 +27,11 @@ export async function call<T>(path: string, init?: { method?: string; body?: unk
   return body as T;
 }
 
-const NO_CONFIG: AppConfig = { supportUrl: null, policiesPublished: false };
+const NO_CONFIG: AppConfig = { supportUrl: null, policiesPublished: false, nonprofitSignupsOpen: false };
 export const useConfig = () =>
   useQuery({
     queryKey: ['config'],
-    queryFn: () => call<AppConfig>('/config').catch(() => NO_CONFIG),
+    queryFn: () => call<AppConfig>('/config').then((c) => ({ ...NO_CONFIG, ...c })).catch(() => NO_CONFIG),
     staleTime: 5 * 60_000,
     placeholderData: NO_CONFIG,
   });
@@ -39,8 +39,9 @@ export const useConfig = () =>
 // The same screens run against the real API or the in-browser demo.
 export function useAppState(postingId?: string) {
   const persona = useDemoPersona();
+  const v = useDemoVersion(); // restart, switch, and the demo clock refresh every screen at once
   return useQuery({
-    queryKey: ['state', persona ?? 'live', postingId ?? ''],
+    queryKey: ['state', persona ?? 'live', postingId ?? '', persona ? v : 0],
     queryFn: () => (persona ? demo.state(postingId) : call<AppState>(`/state${postingId ? `?postingId=${encodeURIComponent(postingId)}` : ''}`)),
     refetchInterval: persona ? 30_000 : 8000,
     placeholderData: (prev) => prev,

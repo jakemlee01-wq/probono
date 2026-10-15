@@ -8,7 +8,8 @@ import { Projects } from '@/components/projects';
 import { Onboarding } from '@/components/onboarding';
 import { ProfileEditor } from '@/components/profile-editor';
 import { Postings } from '@/components/postings';
-import { DemoBanner } from '@/components/demo';
+import { DemoBar, DemoGuide } from '@/components/demo';
+import { demo as demoStore, useDemoVersion } from '@/lib/demo-store';
 import { Notifications } from '@/components/notifications';
 import { ApiError, useAppState, useOnline } from '@/lib/api';
 import { useAct } from '@/lib/act';
@@ -36,6 +37,7 @@ function Shell() {
   const [loc, go] = useLocation();
   const { tab, projectId } = parse(loc);
   const { demo } = useSession();
+  useDemoVersion(); // re-render when the guide is shown or hidden
   const [sel, setSel] = useState<string | undefined>(undefined);
   const q = useAppState(sel);
   const online = useOnline();
@@ -56,27 +58,31 @@ function Shell() {
   const active = sel ?? state.postings[0]?.id;
   const dark = tab === 'discover';
   const live = state.projects.filter((p) => ['pending', 'active', 'completion_pending'].includes(p.status));
-  const needsMe = live.some((p) => ['Waiting for you', 'Awaiting confirmations', 'Scope pending', 'Change proposed', 'Completion pending'].includes(projectLabel(p, me.kind).label));
-  const pill = me.paused ? 'Paused' : live.length ? `${live.length} project${live.length > 1 ? 's' : ''} in progress` : np ? (state.reviewGate?.waiting ? 'Waiting for review' : 'Accepting volunteers') : `Open · ${me.terms.hoursPerWeek} hrs/wk`;
+  const needsMe = live.some((p) => projectLabel(p, me.kind).yours);
+  const pill = me.paused ? 'Paused'
+    : live.length > 1 ? `${live.length} projects`
+    : live.length === 1 ? projectLabel(live[0], me.kind).label
+    : np ? (state.reviewGate?.waiting ? 'Waiting for review' : 'Accepting volunteers') : 'Open to projects';
   const openNotice = (n: AppNotification) => go(n.projectId ? `/app/projects/${n.projectId}` : '/app');
   const stale = q.isError && !!state;
 
   return (
     <div className={`grain relative min-h-[100dvh] ${dark ? 'bg-plum text-white' : 'bg-cream text-plum'}`}>
-      {demo && <DemoBanner persona={demo} />}
+      {demo && <DemoBar persona={demo} />}
       {(!online || stale) && (
         <div role="status" className="relative z-40 flex items-center justify-center gap-2 bg-[#8a2f25] px-3 py-2 text-center text-xs text-cream">
           <WifiOff size={14} aria-hidden />{!online ? "You're offline. You're seeing the last saved view, and changes won't be sent until you're back." : "Can't reach probono right now. Retrying. Changes may not save."}
         </div>
       )}
       <header className="relative z-10 mx-auto flex max-w-2xl items-center justify-between gap-2 px-5 pb-3 pt-4">
-        <span className="font-serif text-2xl">probono</span>
-        <span className="flex items-center gap-1">
-          <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${dark ? 'border-white/30 bg-white/10' : 'border-plum/30 bg-plum/5'}`}>{pill}</span>
+        <span className="shrink-0 font-serif text-2xl">probono</span>
+        <span className="flex min-w-0 items-center gap-1">
+          <span className={`min-w-0 truncate rounded-full border px-3 py-1 text-xs font-semibold ${dark ? 'border-white/30 bg-white/10' : 'border-plum/30 bg-plum/5'}`}>{pill}</span>
           <Notifications items={state.notifications} unread={state.unread} dark={dark} onOpen={openNotice} />
         </span>
       </header>
       <main className="relative z-10 mx-auto max-w-2xl px-4 pb-28 pt-2">
+        {demo && demoStore.guideOn() && <DemoGuide state={state} me={me} dark={dark} />}
         {tab === 'discover' && np && state.postings.length > 1 && (
           <div className="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4" role="group" aria-label="Choose a posting">
             {state.postings.map((p) => (
@@ -86,7 +92,7 @@ function Shell() {
         )}
         {tab === 'discover' && <Discovery state={state} me={me} postingId={active} goProfile={() => go('/app/profile')} goProject={(id) => go(`/app/projects/${id}`)} />}
         {tab === 'projects' && <Projects state={state} me={me} openId={projectId} open={(id) => go(id ? `/app/projects/${id}` : '/app/projects')} goDiscover={() => go('/app')} />}
-        {tab === 'profile' && <ProfileTab me={me} state={state} onWork={(id) => { setSel(id); go('/app'); }} />}
+        {tab === 'profile' && <ProfileTab me={me} state={state} onWork={(id) => { setSel(id); go('/app'); }} onOpenProject={(id) => go(`/app/projects/${id}`)} />}
       </main>
       <nav aria-label="Main" className={`pb-safe fixed inset-x-0 bottom-0 z-30 border-t ${dark ? 'border-white/15 bg-plum' : 'border-plum/15 bg-cream'}`}>
         <div className="mx-auto grid h-16 max-w-2xl grid-cols-3">
@@ -103,7 +109,7 @@ function Shell() {
   );
 }
 
-function ProfileTab({ me, state, onWork }: { me: Profile; state: AppState; onWork: (id: string) => void }) {
+function ProfileTab({ me, state, onWork, onOpenProject }: { me: Profile; state: AppState; onWork: (id: string) => void; onOpenProject: (id: string) => void }) {
   const [seg, setSeg] = useState<'postings' | 'profile'>('postings');
   const np = me.kind === 'nonprofit';
   return (
@@ -114,7 +120,7 @@ function ProfileTab({ me, state, onWork }: { me: Profile; state: AppState; onWor
           {(['postings', 'profile'] as const).map((s) => <button key={s} role="tab" aria-selected={seg === s} onClick={() => setSeg(s)} className={`min-h-10 flex-1 rounded-full py-2 text-xs font-semibold capitalize ${seg === s ? 'bg-plum text-cream' : 'text-plum/75'}`}>{s === 'profile' ? 'Organization' : 'Postings'}</button>)}
         </div>
       )}
-      {np && seg === 'postings' ? <Postings state={state} me={me} onWork={onWork} /> : <ProfileEditor key={me.id} profile={me} state={state} />}
+      {np && seg === 'postings' ? <Postings state={state} me={me} onWork={onWork} onOpenProject={onOpenProject} /> : <ProfileEditor key={me.id} profile={me} state={state} />}
     </div>
   );
 }

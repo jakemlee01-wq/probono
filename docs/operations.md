@@ -13,6 +13,7 @@ These are open until someone does them. The code is in place; the decisions and 
 | Support contact | Not configured | Decide who answers. Set the function secret `SUPPORT_URL` (a `mailto:` or form link). Until then the app says support isn't set up. |
 | Moderation owner | Not named | Someone must check `admin.open_reports` regularly. The app doesn't promise a response time. |
 | Organization review | Manual, no owner yet | Every nonprofit stays hidden from volunteers until reviewed (see below). |
+| Nonprofit sign-ups | Closed | New nonprofit accounts are refused, with an honest "not open yet" page, until you set the function secret `NONPROFIT_SIGNUPS=open`. Open it once review, support, and policies are in place. Existing members can always sign in. |
 | Hosting availability | Not verified | Check Supabase's current free-plan terms for inactivity pausing and limits, and decide whether the pilot needs a paid plan. |
 | Old demo leftovers | Hidden, not removed | See "Old demo rows" below. |
 
@@ -20,7 +21,7 @@ These are open until someone does them. The code is in place; the decisions and 
 
 1. Merge the `fixes` branch into `main` once you're happy with it. The Deploy workflow then runs the tests, applies the new migration (`20261015000000_safety.sql`, additive only), deploys the `api` function, and publishes the site.
 2. The workflow no longer sets `DEMO_MODE`. The demo now runs in each visitor's browser, so there's nothing to turn on or off on the server. You can delete the old `DEMO_MODE` secret: Supabase dashboard, Edge Functions, Secrets.
-3. Optional function secrets (Edge Functions, Secrets): `SUPPORT_URL`, `POLICIES_PUBLISHED`.
+3. Optional function secrets (Edge Functions, Secrets): `SUPPORT_URL`, `POLICIES_PUBLISHED`, `NONPROFIT_SIGNUPS`.
 4. No new GitHub secrets are needed. The workflow still uses `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD`.
 
 Rollback: revert the merge commit on `main`. The migration only adds tables and an `admin` schema, so the previous function keeps working with them in place.

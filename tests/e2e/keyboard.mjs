@@ -11,16 +11,12 @@ async function tabTo(text, max = 40) {
   return false;
 }
 await p.goto(base);
-ok(await tabTo('Try the demo'), 'reach "Try the demo" by Tab');
-await p.keyboard.press('Enter');
-await p.waitForTimeout(200);
-ok(await p.evaluate(() => !!document.activeElement?.closest('[role=dialog]')), 'focus moves into the dialog');
-ok(await tabTo('Sally'), 'reach Sally in the picker');
+ok(await tabTo('Explore the demo'), 'reach "Explore the demo" by Tab');
 await p.keyboard.press('Enter');
 await p.waitForTimeout(500);
-ok(await tabTo('Riverside Arts Collective: slide'), 'reach the card carousel');
-await p.keyboard.press('ArrowRight');
-ok((await focused()).includes('slide 2'), 'arrow keys move slides');
+ok(await tabTo('Show details about Eastside Food Shelf'), 'reach card details');
+await p.keyboard.press('Enter');
+ok(await p.evaluate(() => !!document.querySelector('details[open]')), 'details open from the keyboard');
 ok(await tabTo('Show interest'), 'reach Show interest');
 await p.keyboard.press('Enter');
 await p.waitForTimeout(200);
@@ -36,6 +32,7 @@ ok(await tabTo('Open project'), 'reach Open project in the notice');
 await p.keyboard.press('Enter');
 await p.waitForTimeout(400);
 ok(await tabTo('Edit agreement', 80), 'reach Edit agreement');
+ok(await tabTo('Review agreement', 80), 'reach Review agreement');
 ok(await tabTo('Report or block', 80), 'reach Report or block');
 await p.keyboard.press('Enter');
 await p.waitForTimeout(200);

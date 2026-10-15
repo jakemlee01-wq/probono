@@ -19,7 +19,7 @@ Deno.serve({ port: 8787 }, async (req) => {
   }
   const id = (req.headers.get('Authorization') ?? '').replace('Bearer ', '').split('.')[1] ?? '';
   try {
-    if (route === '/config') return json({ supportUrl: null, policiesPublished: false });
+    if (route === '/config') return json({ supportUrl: null, policiesPublished: false, nonprofitSignupsOpen: Deno.env.get('NONPROFIT_SIGNUPS') === 'open' });
     if (route === '/invites/check') {
       const { code } = await req.json();
       const { outcome, row } = await inviteStatus(sql, code);

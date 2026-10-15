@@ -23,7 +23,10 @@ export function Chat({ project, meId, readOnly }: { project: Project; meId: stri
   return (
     <section aria-label="Messages" className="rounded-3xl border border-plum/15 bg-white/50 p-4">
       <div className="mb-3 max-h-80 min-h-24 space-y-2 overflow-y-auto" role="log" aria-live="polite">
-        {project.messages.length === 0 && <p className="py-6 text-center text-sm text-plum/60">Nothing here yet. Say hello and agree the details together.</p>}
+        {project.messages.length === 0 && <p className="py-6 text-center text-sm text-plum/60">{
+          project.status === 'pending' ? 'No messages yet. Say hello and settle any questions about the agreement.'
+          : ['active', 'completion_pending'].includes(project.status) ? 'No messages yet. Use this for questions and weekly updates.'
+          : 'No messages were sent on this project.'}</p>}
         {project.messages.map((m) => {
           const mine = m.senderId === meId;
           if (m.system) return <p key={m.id} className="py-1 text-center text-xs text-plum/60">{m.text}</p>;
@@ -39,7 +42,7 @@ export function Chat({ project, meId, readOnly }: { project: Project; meId: stri
         })}
         <div ref={end} />
       </div>
-      {readOnly ? <p className="text-center text-xs text-plum/60">Messages are closed for this project.</p> : (
+      {readOnly ? <p className="text-center text-xs text-plum/60">Messages are closed because this project has ended. {project.status === 'closed' ? 'The closing record is at the top of this page.' : ''}</p> : (
         <>
           <div className="flex gap-2">
             <textarea aria-label="Message" rows={1} className={`${inputCls} resize-none`} value={text} placeholder="Write a message" onChange={(e) => setText(e.target.value)}

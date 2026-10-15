@@ -4,14 +4,62 @@
 import type { Db, Pair, ReviewRow } from './core.ts';
 import { draftAgreement } from './core.ts';
 import { addDays, pilotDate } from './rules.ts';
-import type { Posting, Profile, Project, Terms } from './types.ts';
+import type { AgreementFields, Posting, Profile, Project, Terms } from './types.ts';
 
+// The guided story is Sally (volunteer) and Eastside Food Shelf (nonprofit) on a budget template.
+// Marcus and Northside are there for free exploration.
 export const DEMO_PERSONAS = [
-  { id: 'sally', name: 'Sally', kind: 'volunteer', blurb: 'Volunteer. Riverside is already interested in her.' },
-  { id: 'marcus', name: 'Marcus', kind: 'volunteer', blurb: "Volunteer. He's already interested in Northside." },
-  { id: 'riverside', name: 'Riverside Arts Collective', kind: 'nonprofit', blurb: 'Nonprofit. Sally is waiting on its interest.' },
-  { id: 'northside', name: 'Northside Youth Housing', kind: 'nonprofit', blurb: 'Nonprofit. Marcus is interested in its posting.' },
+  { id: 'sally', name: 'Sally', kind: 'volunteer', blurb: 'The volunteer in the guided story.' },
+  { id: 'eastside', name: 'Eastside Food Shelf', kind: 'nonprofit', blurb: 'The nonprofit in the guided story.' },
+  { id: 'marcus', name: 'Marcus', kind: 'volunteer', blurb: "Another volunteer. He's interested in Northside's posting." },
+  { id: 'northside', name: 'Northside Youth Housing', kind: 'nonprofit', blurb: 'Another nonprofit, with two postings.' },
 ] as const;
+export const GUIDED_POSTING = 'eastside-budget';
+
+// Prepared agreements, so visitors can read and accept one instead of writing a contract.
+// Real projects start from a blank draft and need both sides to fill it in.
+export function demoPrefill(postingId: string): Partial<AgreementFields> | undefined {
+  const common = { accessLevel: 'none' as const, checkInPlan: '30-minute video call every Tuesday at 4 pm. Either of us can pause or stop the project there.' };
+  const by: Record<string, Partial<AgreementFields>> = {
+    'eastside-budget': {
+      nonprofitContact: 'Ruth, executive director',
+      deliverables: "A one-page budget template in our shared spreadsheet, with last year's actual spending filled in, plus a 30-minute walkthrough for Ruth and our treasurer.",
+      acceptance: 'Ruth updates the template for next quarter without help, and the board can read it at its next meeting.',
+      inScope: "Grouping last year's spending into budget categories, building the template, and the walkthrough.",
+      exclusions: 'No changes to bank or bookkeeping records, no tax filings, and no grant reports.',
+      inputs: "An export of last year's spending and the current grant list, sent by Ruth before the first call.",
+      accessSystems: 'Spending export and grant list, shared as files. No logins.',
+    },
+    'northside-reports': {
+      nonprofitContact: 'Dana, finance manager',
+      deliverables: 'Three saved monthly report templates and a one-page guide for running them.',
+      acceptance: 'Dana runs one month-end set of reports from the templates without help.',
+      inScope: 'Designing and saving the three report templates, and the guide.',
+      exclusions: 'No changes to posted transactions, users, or system settings.',
+      inputs: 'Exports of last month\'s reports and a list of what the board asks for.',
+      accessSystems: 'Report exports shared as files. A screen share for the walkthrough.',
+    },
+    'northside-budget': {
+      nonprofitContact: 'Dana, finance manager',
+      deliverables: 'One combined program budget workbook and a short note on how to update it.',
+      acceptance: 'The board finance committee reviews it without asking for a rebuild.',
+      inScope: 'Combining the three program spreadsheets into one budget.',
+      exclusions: 'No payroll changes and no grant reports.',
+      inputs: 'The three current program spreadsheets.',
+      accessSystems: 'Spreadsheets shared as files.',
+    },
+    'riverside-netsuite': {
+      nonprofitContact: 'Maya, operations director',
+      deliverables: 'Program reports for the new grant set up in NetSuite, and a one-page guide.',
+      acceptance: 'Maya runs the grant report for one month without help.',
+      inScope: 'Report setup and a walkthrough.',
+      exclusions: 'No changes to posted transactions, users, or integrations.',
+      inputs: 'The grant budget and the current chart of accounts.',
+      accessSystems: 'Screen share only. Maya makes any changes in the system herself.',
+    },
+  };
+  return by[postingId] ? { ...common, ...by[postingId] } : undefined;
+}
 export type DemoPersonaId = (typeof DEMO_PERSONAS)[number]['id'];
 export const demoUserId = (id: string) => `demo:${id}`;
 
@@ -94,17 +142,18 @@ export function demoDb(now: number): Db {
     { ...posting('northside-budget', 'northside', 'Program budget for next year', ['budgeting'], postingTerms(14)),
       prompts: { first: byId('northside').prompts.first, second: 'Our program budgets live in three spreadsheets that disagree with each other.', third: 'One board-ready budget, and a team who knows how to update it.' } },
     posting('riverside-netsuite', 'riverside', 'Finish our NetSuite setup for grant reporting', ['netsuite', 'accounting_systems'], postingTerms(10)),
-    posting('eastside-budget', 'eastside', 'Our first annual budget', ['budgeting'], postingTerms(10)),
+    { ...posting('eastside-budget', 'eastside', 'A simple annual budget template', ['budgeting'], { ...postingTerms(10, 4), hoursPerWeek: 3 }),
+      prompts: { first: byId('eastside').prompts.first, second: "We've never had a full annual budget, and our board has asked for one.", third: 'A one-page budget template we can update ourselves each quarter.' } },
     // Past, completed work. The track records on each profile are counted from these.
     posting('riverside-coa', 'riverside', 'Chart of accounts for our new system', ['accounting_systems'], postingTerms(-150, 4), 'Complete'),
-    posting('eastside-grants', 'eastside', 'Grant tracking workbook', ['grant_accounting'], postingTerms(-120, 4), 'Complete'),
+    posting('riverside-grants', 'riverside', 'Grant tracking workbook', ['grant_accounting'], postingTerms(-120, 4), 'Complete'),
     posting('northside-2024-budget', 'northside', 'Program budget refresh', ['budgeting'], postingTerms(-200, 5), 'Complete'),
   ];
 
   const pairs: Pair[] = [
-    { id: 'riverside-netsuite-sally', postingId: 'riverside-netsuite', volunteerId: 'sally', status: 'interest', data: {
+    { id: 'eastside-budget-sally', postingId: 'eastside-budget', volunteerId: 'sally', status: 'interest', data: {
       nonprofitInterested: true, nonprofitInterestAt: new Date(now - 3600_000 * 20).toISOString(), acknowledgements: {},
-      nonprofitNote: 'Your note about making NetSuite less overwhelming is exactly where we are. Our grant reports are due in the spring.',
+      nonprofitNote: "You've built budgets for small teams before, and that's exactly what we need. A few hours a week would get us there.",
     } },
     { id: 'northside-reports-marcus', postingId: 'northside-reports', volunteerId: 'marcus', status: 'interest', data: {
       volunteerInterested: true, volunteerInterestAt: new Date(now - 3600_000 * 30).toISOString(), acknowledgements: {},
@@ -114,13 +163,13 @@ export function demoDb(now: number): Db {
       ['volunteer', 'A clear, welcoming team. They knew their programs well, which made the chart of accounts easy to design.'],
       ['nonprofit', 'Marcus built a chart of accounts that matches how our programs actually run, and walked us through every line.', 'yes', true],
     ], [3, 4, 5, 4, 4]),
-    pastProject('eastside-grants', 'sally', 'eastside', 120, 4, [
-      ['volunteer', 'Ruth and her team were ready every week. It was a pleasure to build something they use daily.'],
-      ['nonprofit', 'Sally turned our grant notes into a workbook we update in ten minutes. Our last report went out on time.', 'yes', true],
+    pastProject('riverside-grants', 'priya', 'riverside', 120, 4, [
+      ['volunteer', 'Organized, kind, and quick to answer questions. The workbook came together fast.'],
+      ['nonprofit', 'Priya turned our grant notes into a workbook we update in ten minutes. Our last report went out on time.', 'yes', true],
     ], [6, 5, 6, 7]),
-    pastProject('northside-2024-budget', 'priya', 'northside', 200, 5, [
+    pastProject('northside-2024-budget', 'sally', 'northside', 200, 5, [
       ['volunteer', 'Thoughtful people doing work that really matters. They made time for every check-in.'],
-      ['nonprofit', 'Priya helped us rebuild our program budget so the board could finally follow it.', 'partly', true],
+      ['nonprofit', 'Sally helped us rebuild our program budget so the board could finally follow it.', 'partly', true],
     ], [5, 6, 5, 6, 8]),
   ];
 

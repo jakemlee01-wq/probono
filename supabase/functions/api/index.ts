@@ -12,7 +12,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import type { ActionInput, AppConfig } from '../_shared/types.ts';
 import { INVITE_MESSAGES } from '../_shared/core.ts';
 import { RATE } from '../_shared/rules.ts';
-import { addEvent, AppError, deleteAccount, inviteStatus, recentEvents, runEngine, sha256hex, type User } from './engine.ts';
+import { addEvent, AppError, deleteAccount, inviteStatus, nonprofitSignupsOpen, recentEvents, runEngine, sha256hex, type User } from './engine.ts';
 
 const sql = postgres(Deno.env.get('SUPABASE_DB_URL')!, { prepare: false, max: 3, idle_timeout: 20 });
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -64,6 +64,7 @@ Deno.serve(async (req) => {
       const config: AppConfig = {
         supportUrl: Deno.env.get('SUPPORT_URL') || null,
         policiesPublished: (Deno.env.get('POLICIES_PUBLISHED') ?? '') === 'yes',
+        nonprofitSignupsOpen: nonprofitSignupsOpen(),
       };
       return json(config);
     }

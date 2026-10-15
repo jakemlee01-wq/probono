@@ -17,7 +17,9 @@ Safety: report and block on every profile, card, and project; blocking stops sha
 
 ## The demo
 
-"Try the demo" runs the real engine in the visitor's own browser against fictional fixtures. It creates no account and sends nothing to the server, so visitors never see each other's demo. The demo bar has **Switch**, **Restart my demo**, and **Exit demo**.
+"Explore the demo" on the landing page runs the real engine in the visitor's own browser against fictional fixtures. It creates no account and sends nothing to the server, so visitors never see each other's demo.
+
+It opens straight into a guided volunteer story (Sally and Eastside Food Shelf, a budget template) in four steps: find a project, agree the work, work together, finish. The agreement arrives prepared, the other side's steps can be simulated with one labeled tap, and a demo clock moves time forward without changing agreed dates. "Explore demo" in the top bar switches people (Sally, Eastside, Marcus, Northside), moves the clock, restarts, or exits. Real accounts get none of these shortcuts.
 
 ## Stack
 
