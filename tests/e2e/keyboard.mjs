@@ -11,12 +11,9 @@ async function tabTo(text, max = 40) {
   return false;
 }
 await p.goto(base);
-ok(await tabTo('Explore the demo'), 'reach "Explore the demo" by Tab');
+ok(await tabTo('Try the demo'), 'reach "Try the demo" by Tab');
 await p.keyboard.press('Enter');
 await p.waitForTimeout(500);
-ok(await tabTo('Show details'), 'reach card details');
-await p.keyboard.press('Enter');
-ok(await p.evaluate(() => !!document.querySelector('details[open]')), 'details open from the keyboard');
 ok(await tabTo('Show interest'), 'reach Show interest');
 await p.keyboard.press('Enter');
 await p.waitForTimeout(200);

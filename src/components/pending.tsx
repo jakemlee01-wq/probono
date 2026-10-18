@@ -6,6 +6,7 @@ import { Btn, Confirm, Modal, Tile } from './bits';
 import { Chat } from './chat';
 import { AcceptSheet, AgreementEditor, AgreementView, ExportButton } from './agreement';
 import { SafetyButton } from './safety';
+import { DemoNext } from './demo';
 import { useAct } from '@/lib/act';
 import { fmtInstant, photoUrl, projectLabel, timeLeft, useNow } from '@/lib/util';
 
@@ -41,6 +42,7 @@ export function Pending({ project, me }: { project: Project; me: Profile }) {
         </div>
       </div>
 
+      <DemoNext project={project} me={me} />
       <section aria-label="Decision deadline" className="rounded-3xl bg-plum p-5 text-cream">
         <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-cream/70"><Clock size={14} aria-hidden />Decide by</div>
         <p className="mt-1 font-serif text-3xl">{fmtInstant(project.pendingUntil)}</p>

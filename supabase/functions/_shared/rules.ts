@@ -112,10 +112,11 @@ export function profileErrors(p: { kind: string; name: string; title: string; ye
   return e;
 }
 
-export function postingErrors(p: { title: string; skills: string[]; prompts: Record<string, string>; terms: Terms }): Errors {
+export function postingErrors(p: { title: string; skills: string[]; prompts: Record<string, string>; terms: Terms; doneWhen?: string }): Errors {
   const e: Errors = {};
   const set = (k: string, m: string) => { if (m) e[k] = m; };
   set('title', textError(p.title, 'Title', LIMITS.title, true));
+  set('doneWhen', textError(p.doneWhen ?? '', 'Done when', LIMITS.headline));
   if (!p.skills?.length) e.skills = 'Choose at least one skill.';
   else if (!validIds(p.skills, 'skill')) e.skills = 'Choose skills from the list.';
   for (const k of ['first', 'second', 'third']) set(k, textError(p.prompts?.[k] ?? '', 'This answer', LIMITS.longText));

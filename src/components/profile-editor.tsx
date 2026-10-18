@@ -32,23 +32,23 @@ export function TermsEditor({ value, onChange, errors = {}, kind = 'volunteer' }
     onChange(t);
   };
   const n = (k: keyof Terms, label: string, hint: string, min: number, max: number) => (
-    <Field label={label} name={k} error={errors[k]} hint={hint}>
-      {(f) => <input {...f} name={k} type="number" inputMode="numeric" min={min} max={max} step={1} className={inputCls} value={value[k] as number} onChange={(e) => set({ [k]: num(e.target.value) } as Partial<Terms>)} />}
+    <Field label={label} name={k} error={errors[k]}>
+      {(f) => <input {...f} name={k} type="number" inputMode="numeric" min={min} max={max} step={1} placeholder={hint} className={inputCls} value={value[k] as number} onChange={(e) => set({ [k]: num(e.target.value) } as Partial<Terms>)} />}
     </Field>
   );
   const d = (k: 'startDate' | 'availableUntil', label: string, hint: string) => (
-    <Field label={label} name={k} error={errors[k]} hint={hint}>{(f) => <input {...f} name={k} type="date" className={inputCls} value={value[k]?.slice(0, 10) || ''} onChange={(e) => set({ [k]: e.target.value } as Partial<Terms>)} />}</Field>
+    <Field label={label} name={k} error={errors[k]}>{(f) => <input {...f} name={k} title={hint} type="date" className={inputCls} value={value[k]?.slice(0, 10) || ''} onChange={(e) => set({ [k]: e.target.value } as Partial<Terms>)} />}</Field>
   );
   return (
     <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
       {posting ? <>
-        {n('hoursPerWeek', 'Hours a week', 'What the work needs, 1 to 40.', 1, 40)}
-        {n('weeks', 'Project length (weeks)', 'From start to hand-off.', 1, 52)}
+        {n('hoursPerWeek', 'Hours a week', '1 to 40', 1, 40)}
+        {n('weeks', 'Project length (weeks)', 'e.g. 5', 1, 52)}
         {d('startDate', 'Proposed start', 'Agreed for real in the work agreement.')}
       </> : <>
-        {n('hoursPerWeek', 'Most hours a week', "You'll only see postings that need this or less.", 1, 40)}
-        {n('minWeeks', 'Shortest project', 'In weeks.', 1, 52)}
-        {n('maxWeeks', 'Longest project', 'In weeks.', 1, 52)}
+        {n('hoursPerWeek', 'Most hours a week', 'e.g. 5', 1, 40)}
+        {n('minWeeks', 'Shortest project (weeks)', 'e.g. 4', 1, 52)}
+        {n('maxWeeks', 'Longest project (weeks)', 'e.g. 8', 1, 52)}
         {d('startDate', 'Available from', 'Postings starting before this are hidden.')}
         {d('availableUntil', 'Available until', 'Projects must end by this date.')}
       </>}
@@ -95,7 +95,6 @@ async function preparePhoto(file: File): Promise<Blob> {
 export function ProfileEditor({ profile, state }: { profile: Profile; state: AppState }) {
   const [d, setD] = useState<Profile>(profile);
   const [tried, setTried] = useState(false);
-  const [touched, setTouched] = useState<Set<string>>(new Set());
   const { run, pending } = useAct();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -103,8 +102,8 @@ export function ProfileEditor({ profile, state }: { profile: Profile; state: App
   const vol = d.kind === 'volunteer';
   const demo = state.demo;
   const all = profileErrors(d, new Date().getFullYear());
-  const shown = tried ? all : Object.fromEntries(Object.entries(all).filter(([k]) => touched.has(k)));
-  const blur = (e: React.FocusEvent<HTMLDivElement>) => { const n = (e.target as HTMLElement).getAttribute('name'); if (n) setTouched((s) => new Set(s).add(n)); };
+  // Errors appear after a save attempt, not on blur, so the page never jumps under the pointer.
+  const shown = tried ? all : {};
 
   const save = (next = d) => {
     const errs = profileErrors(next, new Date().getFullYear());
@@ -131,7 +130,7 @@ export function ProfileEditor({ profile, state }: { profile: Profile; state: App
   };
 
   return (
-    <div className="space-y-6 text-plum" onBlur={blur}>
+    <div className="space-y-6 text-plum">
       <ErrorSummary errors={tried ? all : {}} />
       <section className="space-y-3">
         <h2 className="font-serif text-2xl">{vol ? 'About you' : 'About your organization'}</h2>
@@ -139,11 +138,11 @@ export function ProfileEditor({ profile, state }: { profile: Profile; state: App
         <Field label={vol ? 'Role' : 'Mission in a line'} name="title" error={shown.title} count={d.title} max={LIMITS.headline.max}>{(f) => <input {...f} name="title" className={inputCls} value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} />}</Field>
         {vol ? (
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Years of experience" name="years" error={shown.years} hint="Whole number, 0 to 80">{(f) => <input {...f} name="years" type="number" inputMode="numeric" min={0} max={80} step={1} className={inputCls} value={d.years ?? ''} onChange={(e) => setD({ ...d, years: e.target.value === '' ? null : Number(e.target.value) })} />}</Field>
-            <Field label="Credential" name="credential" error={shown.credential} hint="Shown as self-reported">{(f) => <input {...f} name="credential" className={inputCls} value={d.credential} onChange={(e) => setD({ ...d, credential: e.target.value })} placeholder="e.g. CPA" />}</Field>
+            <Field label="Years of experience" name="years" error={shown.years} >{(f) => <input {...f} name="years" type="number" inputMode="numeric" min={0} max={80} step={1} placeholder="e.g. 8" className={inputCls} value={d.years ?? ''} onChange={(e) => setD({ ...d, years: e.target.value === '' ? null : Number(e.target.value) })} />}</Field>
+            <Field label="Credential" name="credential" error={shown.credential}>{(f) => <input {...f} name="credential" className={inputCls} value={d.credential} onChange={(e) => setD({ ...d, credential: e.target.value })} placeholder="e.g. CPA (self-reported)" />}</Field>
           </div>
         ) : (
-          <Field label="Year founded" name="foundedYear" error={shown.foundedYear} hint="Optional. Shown as 'Not provided' if blank.">{(f) => <input {...f} name="foundedYear" type="number" inputMode="numeric" min={1800} max={new Date().getFullYear()} step={1} className={inputCls} value={d.foundedYear ?? ''} onChange={(e) => setD({ ...d, foundedYear: e.target.value === '' ? null : Number(e.target.value) })} />}</Field>
+          <Field label="Year founded" name="foundedYear" error={shown.foundedYear} >{(f) => <input {...f} name="foundedYear" type="number" inputMode="numeric" min={1800} max={new Date().getFullYear()} step={1} placeholder="e.g. 2009 (optional)" className={inputCls} value={d.foundedYear ?? ''} onChange={(e) => setD({ ...d, foundedYear: e.target.value === '' ? null : Number(e.target.value) })} />}</Field>
         )}
         <Badges profile={profile} />
       </section>
@@ -162,12 +161,11 @@ export function ProfileEditor({ profile, state }: { profile: Profile; state: App
           <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
         </div>
         <p className="mt-2 text-xs text-plum/65">
-          {demo ? 'Photo uploads are turned off in the demo.' : `Optional. JPG, PNG, or WebP up to 5 MB, ${LIMITS.photos.max} at most. We resize them and remove location data. Without a photo, your initials show. Removing a photo takes effect when you save.`}
+          {demo ? 'Uploads are off in the demo.' : `Optional. Up to ${LIMITS.photos.max}, 5 MB each.`}
         </p>
       </section>
       <section className="space-y-3">
         <h2 className="font-serif text-2xl">{vol ? 'Skills' : 'Skills you would welcome'}</h2>
-        <p className="text-xs text-plum/65">This pilot covers accounting and finance work.</p>
         <Chips label="Skills" options={SKILL_OPTIONS} value={d.skills} onChange={(skills) => setD({ ...d, skills })} />
         <h2 className="pt-2 font-serif text-2xl">Causes</h2>
         <Chips label="Causes" options={CAUSE_OPTIONS} value={d.causes} onChange={(causes) => setD({ ...d, causes })} />
@@ -175,7 +173,7 @@ export function ProfileEditor({ profile, state }: { profile: Profile; state: App
       {vol && (
         <section>
           <h2 className="mb-1 font-serif text-2xl">What you can take on</h2>
-          <p className="mb-3 text-sm text-plum/70">These are limits for matching. A posting shows up for you only if its hours, length, start date, and format fit inside them.</p>
+          <p className="mb-3 text-sm text-plum/70">How matching works: you only see postings that fit inside these limits.</p>
           <TermsEditor value={d.terms} onChange={(terms) => setD({ ...d, terms })} errors={shown} />
         </section>
       )}
@@ -187,7 +185,7 @@ export function ProfileEditor({ profile, state }: { profile: Profile; state: App
       {vol && (
         <section className="rounded-3xl border border-plum/15 bg-white/50 p-5">
           <h2 className="mb-1 font-serif text-2xl">Take a break</h2>
-          <p className="mb-3 text-sm text-plum/70">Pausing hides you from discovery and stops new interest. Projects already in progress continue, and you can still message those partners.</p>
+          <p className="mb-3 text-sm text-plum/70">Hides you from Match. Current projects continue.</p>
           <button type="button" role="switch" aria-checked={profile.paused} disabled={pending} onClick={() => run({ action: 'pause', paused: !profile.paused })} className="flex min-h-11 items-center gap-3 text-sm font-semibold">
             <span aria-hidden className={`relative h-6 w-11 rounded-full ${profile.paused ? 'bg-plum' : 'bg-plum/25'}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${profile.paused ? 'left-6' : 'left-1'}`} /></span>
             Pause my profile
@@ -234,7 +232,7 @@ function Account({ demo }: { demo: boolean }) {
       </nav>
       {!demo && <Btn v="ghost" className="w-full" onClick={signOut}>Sign out</Btn>}
       {!demo && <button onClick={() => setDel(true)} className="min-h-11 w-full text-sm text-[#8a2f25] underline underline-offset-4">Delete my account</button>}
-      {demo && <p className="text-xs text-plum/65">Sign-out and account deletion don't apply in the demo. Use "Exit demo" at the top.</p>}
+      {demo && <p className="text-xs text-plum/65">Not available in the demo.</p>}
       {del && <DeleteAccount onClose={() => setDel(false)} />}
     </section>
   );

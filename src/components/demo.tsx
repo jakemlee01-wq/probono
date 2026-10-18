@@ -18,7 +18,7 @@ export function DemoEntry() {
   const saved = persona !== null || demo.saved();
   const enter = (fresh: boolean) => { if (fresh) demo.start('sally'); else demo.resume(); go('/app'); };
   if (!saved) {
-    return <Btn v="light" className="w-full !min-h-14 text-base" onClick={() => enter(true)}>Explore the demo</Btn>;
+    return <Btn v="light" className="w-full !min-h-14 text-base" onClick={() => enter(true)}>Try the demo</Btn>;
   }
   return (
     <div className="grid grid-cols-2 gap-2">
@@ -100,7 +100,7 @@ export function DemoGuide({ state, me, dark }: { state: AppState; me: Profile; d
   } else if (!p) {
     step = 1;
     line = vol ? "Tap Show interest on Eastside's project." : 'Waiting for Sally. Switch to her in Explore demo.';
-    body = vol ? 'Eastside Food Shelf needs a simple budget template, about 3 hours a week for 4 weeks. Show details on the card has the rest.'
+    body = vol ? 'Eastside Food Shelf needs a simple budget template, about 3 hours a week for 4 weeks. '
       : "You're Eastside Food Shelf. You posted a budget-template project and showed interest in Sally.";
   } else if (p.status === 'pending') {
     step = 2;
@@ -161,5 +161,37 @@ export function DemoLink({ className = '' }: { className?: string }) {
     <button onClick={() => { if (demo.saved()) demo.resume(); else demo.start('sally'); go('/app'); }} className={`min-h-11 text-sm underline underline-offset-4 ${className}`}>
       Explore the demo instead
     </button>
+  );
+}
+
+// Demo only: the next step for the other side, shown right where it's needed so one visitor can see
+// the whole story. Each simulated step is labeled in the project record.
+export function DemoNext({ project, me }: { project: import('@shared/types').Project; me: Profile }) {
+  const persona = useDemoPersona();
+  const [, go] = useLocation();
+  const { run, pending } = useAct();
+  if (!persona) return null;
+  const vol = me.kind === 'volunteer';
+  const other = (vol ? project.nonprofit : project.volunteer).name;
+  const mine = vol ? project.volunteerConfirmed : project.nonprofitConfirmed;
+  const theirs = vol ? project.nonprofitConfirmed : project.volunteerConfirmed;
+  const sim = (label: string) => <Btn v="apricot" className="min-h-10 !py-2 text-xs" disabled={pending} onClick={() => run({ action: 'demo_other_side', projectId: project.id })}>{label}</Btn>;
+  let action: ReactNode = null;
+  if (project.status === 'pending' && mine && !theirs) action = sim(`Simulate ${other} accepting`);
+  else if (project.status === 'active' && (project.week ?? 0) === 0) action = <Btn v="apricot" className="min-h-10 !py-2 text-xs" onClick={() => demo.advanceWeek()}>Skip ahead one week</Btn>;
+  else if (project.status === 'completion_pending' && (vol ? project.closing.volunteer : project.closing.nonprofit) && !(vol ? project.closing.nonprofit : project.closing.volunteer)) action = sim(`Simulate ${other}'s closing note`);
+  else if (project.status === 'closed' && project.posting.id === GUIDED_POSTING) {
+    action = <>
+      {vol ? <Btn v="apricot" className="min-h-10 !py-2 text-xs" onClick={() => { demo.switchTo('eastside'); go('/app/projects'); }}>See it as the nonprofit</Btn>
+        : <Btn v="apricot" className="min-h-10 !py-2 text-xs" onClick={() => { demo.switchTo('sally'); go('/app/projects'); }}>Back to Sally</Btn>}
+      <Btn v="ghost" className="min-h-10 !py-2 text-xs" onClick={() => { demo.restart(); go('/app'); }}>Restart demo</Btn>
+    </>;
+  }
+  if (!action) return null;
+  return (
+    <div role="region" aria-label="Demo shortcut" className="flex flex-wrap items-center gap-2 rounded-2xl border border-dashed border-plum/40 bg-white/60 p-3 text-plum">
+      <p className="mr-auto text-xs font-semibold">Demo only. The other side is simulated.</p>
+      {action}
+    </div>
   );
 }

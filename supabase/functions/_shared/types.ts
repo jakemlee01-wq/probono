@@ -76,6 +76,7 @@ export type Posting = {
   prompts: Prompts;
   status: PostingStatus;
   notesLeft: number; // interest messages remaining for this posting; never resets
+  doneWhen?: string; // one line: how the nonprofit will know the work is done
   visible?: boolean; // computed: false while the organization is waiting for review
 };
 

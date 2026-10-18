@@ -6,18 +6,18 @@ A small, phone-first pilot that introduces accounting and finance volunteers to 
 
 ## How it works
 
-1. **Discover** (plum). One prospect at a time, only ones that fit: skills, hours, weeks, dates, and format. **Not now** or **Show interest**. Nonprofits write a real message (20 to 1,000 characters) and get five per posting; replying to someone already interested is free.
+1. **Match** (plum). One prospect at a time, only ones that fit: skills, hours, weeks, dates, and format. **Not now** or **Show interest**. Nonprofits write a real message (20 to 1,000 characters) and get five per posting; replying to someone already interested is free.
 2. **Proposed project.** When interest is mutual, both sides have 72 hours to agree a one-page work agreement: deliverables, how completion is judged, scope and exclusions, inputs, time, system access (defaults to none), and check-ins. Every edit makes a new version. Each side accepts a specific version, with a confidentiality and licensing acknowledgment, and the project starts only when both accept the same one.
 3. **Partnership.** Kickoff checklist, hours (self-reported until the nonprofit confirms them), check-ins, tasks, messages, people and links. Either side can propose a change (both re-accept) or stop the project.
 4. **Completion.** Either side marks the work complete with a closing note. It completes when both notes are in. The nonprofit says whether it unblocked them and confirms the hours.
 
-Navigation stays the same throughout: Discover, Projects, Profile. One proposed or active project at a time per volunteer and per posting; Discover explains this instead of disappearing.
+Navigation stays the same throughout: Match, Projects, Profile. One proposed or active project at a time per volunteer and per posting; Discover explains this instead of disappearing.
 
 Safety: report and block on every profile, card, and project; blocking stops shared work and hides both sides. Reports are private. Operators review organizations, handle reports, and issue invites from the Supabase SQL editor (`docs/operations.md`).
 
 ## The demo
 
-"Explore the demo" on the landing page runs the real engine in the visitor's own browser against fictional fixtures. It creates no account and sends nothing to the server, so visitors never see each other's demo.
+"Try the demo" on the landing page runs the real engine in the visitor's own browser against fictional fixtures. It creates no account and sends nothing to the server, so visitors never see each other's demo.
 
 It opens straight into a guided volunteer story (Sally and Eastside Food Shelf, a budget template) in four steps: find a project, agree the work, work together, finish. The agreement arrives prepared, the other side's steps can be simulated with one labeled tap, and a demo clock moves time forward without changing agreed dates. "Explore demo" in the top bar switches people (Sally, Eastside, Marcus, Northside), moves the clock, restarts, or exits. Real accounts get none of these shortcuts.
 

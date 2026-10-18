@@ -73,6 +73,9 @@ function PostingForm({ initial, onClose }: { initial: Posting; onClose: () => vo
         <Field label="Title" name="title" required error={shown.title} count={d.title} max={LIMITS.title.max} hint={`${LIMITS.title.min} to ${LIMITS.title.max} characters`}>
           {(f) => <input {...f} name="title" className={inputCls} value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} placeholder="e.g. Build our first annual budget" />}
         </Field>
+        <Field label="Done when" name="doneWhen" error={shown.doneWhen} count={d.doneWhen ?? ''} max={LIMITS.headline.max}>
+          {(f) => <input {...f} name="doneWhen" className={inputCls} value={d.doneWhen ?? ''} onChange={(e) => setD({ ...d, doneWhen: e.target.value })} placeholder="e.g. Our director updates the budget alone next quarter" />}
+        </Field>
         <div>
           <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-plum/65">Skills needed <span className="normal-case tracking-normal text-plum/50">(required)</span></p>
           <Chips label="Skills needed" options={SKILL_OPTIONS} value={d.skills} onChange={(skills) => setD({ ...d, skills })} />
