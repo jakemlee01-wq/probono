@@ -4,7 +4,6 @@ import type { AppState, Profile } from '@shared/types';
 import { LIMITS, textError } from '@shared/rules';
 import { ProspectCard } from './prospect-card';
 import { Btn, Field, Modal, inputCls } from './bits';
-import { HowItWorks } from './how';
 import { useAct } from '@/lib/act';
 
 export function Discovery({ state, me, postingId, goProfile, goProject }: { state: AppState; me: Profile; postingId?: string; goProfile: () => void; goProject: (id: string) => void }) {
@@ -44,13 +43,10 @@ export function Discovery({ state, me, postingId, goProfile, goProject }: { stat
 
   return (
     <div className="mx-auto w-full max-w-md">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <HowItWorks kind={me.kind} tone="dark" />
-        {isNp && posting && <span className="text-xs text-white/75">{notesLeft} interest message{notesLeft === 1 ? '' : 's'} remaining for this posting</span>}
-      </div>
+      {isNp && posting && <p className="mb-2 text-xs text-white/75">{notesLeft} interest message{notesLeft === 1 ? '' : 's'} remaining for this posting</p>}
       <ProspectCard key={p.profile.id + p.posting.id} prospect={p} viewer={isNp ? 'nonprofit' : 'volunteer'} readOnly={full ? state.capacity.reason : undefined} />
       {/* In the page flow and sticky, so it reserves its own space and never covers the card. */}
-      <div className="pb-safe sticky bottom-16 z-20 -mx-4 mt-3 bg-gradient-to-t from-plum via-plum to-plum/0 px-4 pb-3 pt-4">
+      <div className="pb-safe sticky bottom-16 z-20 -mx-4 mt-3 bg-gradient-to-t from-plum via-plum to-plum/0 px-4 pb-3 pt-2">
         {full ? (
           <div className="mx-auto max-w-md rounded-3xl border border-white/25 bg-plum2 p-3 text-center">
             <p className="text-xs text-white/85">You're browsing. {state.capacity.reason}</p>

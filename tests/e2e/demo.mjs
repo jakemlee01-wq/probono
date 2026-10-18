@@ -49,7 +49,21 @@ const a = await visitor();
 await a.goto(base);
 await btn(a, 'Explore the demo').click();
 await wait(a, 500);
-ok((await guide(a).textContent()).includes("You're trying the volunteer view as Sally"), 'first screen says which fictional role and what to do');
+ok((await a.getByRole('region', { name: 'Demo', exact: true }).textContent()).includes('as Sally'), 'bar says which fictional person');
+ok((await guide(a).boundingBox()).height <= 64, 'guide is one line');
+await guide(a).getByRole('button', { name: 'More' }).click();
+ok((await guide(a).textContent()).includes("You're trying the volunteer view as Sally"), 'More explains the role');
+await guide(a).getByRole('button', { name: 'Less' }).click();
+{
+  const img = a.getByRole('img', { name: /Photo from Eastside/ }), h2 = a.getByRole('heading', { name: 'A simple annual budget template' });
+  const chips = a.getByRole('list', { name: 'Skills and time' }), bar = a.getByRole('button', { name: 'Show interest', exact: true });
+  const [ib, hb, cb, bb] = [await img.boundingBox(), await h2.boundingBox(), await chips.boundingBox(), await bar.boundingBox()];
+  ok(ib.y < hb.y && hb.y < cb.y, 'photo first, then title, then chips');
+  ok(ib.width >= 300, 'photo is full width: ' + ib.width);
+  ok(cb.y + cb.height <= bb.y, 'title and chips visible above the action bar without scrolling (390x844)');
+  ok(!(await a.getByText('Why it matters').isVisible()), 'longer text moved into Show details');
+  ok(await a.getByText('Fictional · AI-generated photo').first().isVisible(), 'caption on the photo');
+}
 ok(await guide(a).getByText('Step 1 of 4').first().isVisible(), 'guide: step 1');
 ok(await a.getByRole('heading', { name: 'A simple annual budget template' }).isVisible(), 'card leads with the work, not a face');
 await shot(a, 'clarity-01-find');
@@ -104,7 +118,7 @@ await shot(a, 'clarity-05-done', true);
 await guide(a).getByRole('button', { name: 'Explore as a nonprofit' }).click();
 await wait(a, 500);
 await okNotice(a);
-ok(await a.getByText('Completed', { exact: false }).first().isVisible() && (await guide(a).textContent()).includes('nonprofit view'), 'nonprofit view of the same story');
+ok(await a.getByText('Completed', { exact: false }).first().isVisible() && (await guide(a).textContent()).includes("Eastside's side"), 'nonprofit view of the same story');
 await a.getByRole('button', { name: /^Sally/ }).first().click();
 await wait(a);
 ok(await a.getByText('Template delivered and walked through with Ruth.').first().isVisible(), 'same closing record from the nonprofit side');
@@ -226,6 +240,21 @@ await a.goto(base + '#/app');
 await wait(a);
 ok(a.url().endsWith('#/') || await btn(a, 'Resume your demo').isVisible() || await a.getByRole('heading', { level: 1 }).isVisible(), 'after Exit, app screens do not keep acting as a fictional user');
 
+// Small phone: photo, title and chips sit above the action bar.
+{
+  const q = await visitor(320, 568);
+  await q.goto(base);
+  await btn(q, 'Explore the demo').click();
+  await wait(q, 500);
+  const hb = await q.getByRole('heading', { name: 'A simple annual budget template' }).boundingBox();
+  const cb = await q.getByRole('list', { name: 'Skills and time' }).boundingBox();
+  const bb = await q.getByRole('button', { name: 'Show interest', exact: true }).boundingBox();
+  ok(hb.y + hb.height <= bb.y, 'title visible above the bar at 320x568');
+  ok(cb.y + cb.height <= bb.y + 4 || cb.y < bb.y, 'chips start above the bar at 320x568');
+  await shot(q, 'photo-card-320x568');
+  await q.context().close();
+}
+
 // Second visitor is unaffected by all of the above.
 const b = await visitor();
 await b.goto(base);
@@ -249,3 +278,4 @@ ok(external.length === 0, 'demo sent nothing to the backend: ' + JSON.stringify(
 console.log(`\n${fails ? 'FAILED' : 'ALL PASSED'} (${fails} failures)`);
 await browser.close();
 process.exit(fails ? 1 : 0);
+

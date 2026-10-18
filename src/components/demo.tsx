@@ -36,10 +36,10 @@ export function DemoBar({ persona }: { persona: DemoPersonaId }) {
   return (
     <>
       <div role="region" aria-label="Demo" className="relative z-40 flex min-h-11 items-center justify-between gap-2 bg-apricot px-3 text-xs text-plum">
-        <span className="min-w-0"><b>Demo</b> · fictional · <span className="truncate">as {name}</span></span>
-        <span className="flex shrink-0 items-center gap-1">
-          <button className="min-h-11 rounded-full px-3 font-semibold underline underline-offset-2" onClick={() => setOpen(true)}>Explore demo</button>
-          <button className="min-h-11 rounded-full px-3 font-semibold underline underline-offset-2" onClick={() => { demo.exit(); go('/'); }}>Exit demo</button>
+        <span className="min-w-0 truncate"><b>Demo</b> · fictional · as {name.split(' ')[0]}</span>
+        <span className="flex shrink-0 items-center">
+          <button aria-label="Explore demo" className="min-h-11 rounded-full px-2.5 font-semibold underline underline-offset-2" onClick={() => setOpen(true)}>Explore</button>
+          <button aria-label="Exit demo" className="min-h-11 rounded-full px-2.5 font-semibold underline underline-offset-2" onClick={() => { demo.exit(); go('/'); }}>Exit</button>
         </span>
       </div>
       {open && <ExploreMenu persona={persona} onClose={() => setOpen(false)} />}
@@ -77,60 +77,79 @@ function ExploreMenu({ persona, onClose }: { persona: DemoPersonaId; onClose: ()
   );
 }
 
-// A short, dismissible guide through the story: find, agree, work, finish.
+// The guide through the story (find, agree, work, finish) is one line with the next action.
+// "More" opens the explanation and every option for that step.
 export function DemoGuide({ state, me, dark }: { state: AppState; me: Profile; dark: boolean }) {
-  const [, go] = useLocation();
+  const [loc, go] = useLocation();
+  const [more, setMore] = useState(false);
   const { run, pending } = useAct();
   const vol = me.kind === 'volunteer';
   const p = state.projects.find((x) => x.posting.id === GUIDED_POSTING);
   const inStory = me.id === 'sally' || me.id === 'eastside';
   const other = vol ? 'Eastside Food Shelf' : 'Sally';
-  const simulate = (label: string) => p && <Btn v="apricot" disabled={pending} onClick={() => run({ action: 'demo_other_side', projectId: p.id })}>{label}</Btn>;
-  const open = p && <Btn v={dark ? 'light' : 'primary'} onClick={() => go(`/app/projects/${p.id}`)}>Open the project</Btn>;
-  let step = 1, title = '', body = '', actions: ReactNode = null;
+  const short = vol ? 'Eastside' : 'Sally';
+  const onProject = !!p && loc === `/app/projects/${p.id}`;
+  const small = 'min-h-9 !px-3 !py-1.5 text-xs';
+  const simulate = (label: string) => p && <Btn v="apricot" className={small} disabled={pending} aria-label={label} onClick={() => run({ action: 'demo_other_side', projectId: p.id })}>{`Simulate ${short}`}</Btn>;
+  const open = (label = 'Open') => p && !onProject && <Btn v={dark ? 'light' : 'primary'} className={small} onClick={() => go(`/app/projects/${p.id}`)}>{label}</Btn>;
+  const restart = <Btn v="ghost" className={small} onClick={() => { demo.restart(); go('/app'); }}>Restart demo</Btn>;
+  let step = 0, line = '', body = '', primary: ReactNode = null, extra: ReactNode = null;
   if (!inStory) {
-    title = 'Free exploration';
-    body = `You're ${me.name}, outside the guided story. Try showing interest, editing an agreement, passing, or pausing. Switch people or restart from Explore demo.`;
+    line = 'Free exploration. Switch people or restart in Explore demo.';
+    body = `You're ${me.name}, outside the guided story. Try showing interest, editing an agreement, passing, or pausing.`;
   } else if (!p) {
-    title = 'Find a project';
-    body = vol ? 'Eastside Food Shelf needs a simple budget template, about 3 hours a week for 4 weeks. Read the card, then tap Show interest.'
-      : "You're Eastside Food Shelf. You posted a budget-template project and showed interest in Sally. Switch to Sally in Explore demo to answer as her.";
+    step = 1;
+    line = vol ? "Tap Show interest on Eastside's project." : 'Waiting for Sally. Switch to her in Explore demo.';
+    body = vol ? 'Eastside Food Shelf needs a simple budget template, about 3 hours a week for 4 weeks. Show details on the card has the rest.'
+      : "You're Eastside Food Shelf. You posted a budget-template project and showed interest in Sally.";
   } else if (p.status === 'pending') {
-    step = 2; title = 'Agree the work';
+    step = 2;
     const mine = vol ? p.volunteerConfirmed : p.nonprofitConfirmed;
     const theirs = vol ? p.nonprofitConfirmed : p.volunteerConfirmed;
-    body = !mine
-      ? `A prepared agreement is waiting: deliverables, what's excluded, access (none), and check-ins. Real projects need both sides to accept the same version. ${theirs ? `${other} already accepted (simulated).` : ''}`
-      : `You accepted. In a real project you'd wait for ${other}. Here you can play their part.`;
-    actions = <>{open}{mine && !theirs && simulate(`Simulate ${other} accepting`)}</>;
+    if (!mine) { line = 'Review and accept the prepared agreement.'; primary = open('Review'); }
+    else if (!theirs) { line = `You accepted. Play ${short}'s part:`; primary = simulate(`Simulate ${other} accepting`); }
+    body = `The agreement is prepared for the demo: deliverables, what's excluded, access (none), and check-ins. Real projects need both sides to accept the same version.${theirs ? ` ${other} already accepted (simulated).` : ''}`;
   } else if (p.status === 'active') {
-    step = 3; title = 'Work together';
-    body = (p.week ?? 0) === 0
-      ? `Confirmed. It starts ${fmtDate(p.startDate, 'MMM d')}. Move the demo clock to the first week to see the work begin.`
-      : vol ? "Read Ruth's message, tick off the task, and log a few hours. When the template is handed over, add your closing note." : "Sally is working. Message her and follow the hours she logs. You'll confirm them at the end.";
-    actions = <>{open}{(p.week ?? 0) === 0 && <Btn v="apricot" onClick={() => demo.advanceWeek()}>Skip ahead one week</Btn>}</>;
+    step = 3;
+    if ((p.week ?? 0) === 0) { line = `Confirmed for ${fmtDate(p.startDate, 'MMM d')}. Move the clock to the start.`; primary = <Btn v="apricot" className={small} aria-label="Skip ahead one week" onClick={() => demo.advanceWeek()}>Skip a week</Btn>; }
+    else { line = vol ? 'Log some hours, then add your closing note.' : 'Sally is working. Follow her hours and messages.'; primary = open(); }
+    body = vol ? "Read Ruth's message, tick off the task, and log a few hours. When the template is handed over, add your closing note. The demo clock moves time without changing agreed dates." : "Message Sally and follow the hours she logs. You'll confirm them at the end.";
   } else if (p.status === 'completion_pending') {
-    step = 4; title = 'Finish';
+    step = 4;
     const mine = vol ? p.closing.volunteer : p.closing.nonprofit;
-    body = mine ? `Your closing note is in. A project finishes when both sides add one.` : `${other} added a closing note. Add yours to finish the project.`;
-    actions = <>{open}{mine && simulate(`Simulate ${other}'s closing note`)}</>;
+    if (mine) { line = `Your note is in. Play ${short}'s part:`; primary = simulate(`Simulate ${other}'s closing note`); }
+    else { line = 'Add your closing note to finish.'; primary = open(); }
+    body = 'A project finishes only when both sides add a closing note.';
   } else if (p.status === 'closed') {
-    step = 4; title = 'Done';
-    body = vol ? 'Eastside said the work unblocked them and confirmed your hours. The closing notes are on the project and your track record.' : "This is the same project from Eastside's side: the agreement, Sally's hours, and both closing notes.";
-    actions = <>{open}{vol ? <Btn v="apricot" onClick={() => { demo.switchTo('eastside'); go('/app/projects'); }}>Explore as a nonprofit</Btn> : <Btn v="apricot" onClick={() => { demo.switchTo('sally'); go('/app'); }}>Back to Sally</Btn>}<Btn v="ghost" onClick={() => { demo.restart(); go('/app'); }}>Restart demo</Btn></>;
+    step = 4;
+    line = vol ? "Done. That's the whole cycle." : "Done. This is Eastside's side of the same project.";
+    primary = vol
+      ? <Btn v="apricot" className={small} onClick={() => { demo.switchTo('eastside'); go('/app/projects'); }}>Explore as a nonprofit</Btn>
+      : <Btn v="apricot" className={small} onClick={() => { demo.switchTo('sally'); go('/app'); }}>Back to Sally</Btn>;
+    extra = <>{open('Open the project')}{restart}</>;
+    body = vol ? 'Eastside said the work unblocked them and confirmed your hours. The closing notes are on the project and your track record.' : "The agreement, Sally's hours, and both closing notes, seen from the nonprofit's side.";
   } else {
-    title = 'This story ended early';
+    line = 'This story ended early.';
+    primary = restart;
     body = 'The project was passed, stopped, or ran out of time. Restart to see it again.';
-    actions = <Btn v="apricot" onClick={() => { demo.restart(); go('/app'); }}>Restart demo</Btn>;
   }
   return (
-    <section aria-label="Demo guide" className={`relative mx-auto mb-4 max-w-2xl rounded-3xl border p-4 pr-12 ${dark ? 'border-white/25 bg-plum2 text-white' : 'border-plum/20 bg-white/70 text-plum'}`}>
-      <button aria-label="Hide the guide" onClick={() => demo.setGuide(false)} className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-full"><X size={16} /></button>
-      <p className="text-xs opacity-80">You're trying the {vol ? 'volunteer' : 'nonprofit'} view as {me.name}, a fictional {vol ? 'volunteer' : 'organization'}.</p>
-      {inStory && <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.18em] opacity-75">Step {step} of 4 · {['Find a project', 'Agree the work', 'Work together', 'Finish'][step - 1]}</p>}
-      <p className="mt-1 font-serif text-2xl leading-tight">{title}</p>
-      <p className="mt-1 text-sm opacity-90">{body}</p>
-      {actions && <div className="mt-3 flex flex-wrap gap-2">{actions}</div>}
+    <section aria-label="Demo guide" className={`mx-auto mb-3 max-w-2xl rounded-2xl border px-3 py-1.5 ${dark ? 'border-white/25 bg-plum2 text-white' : 'border-plum/20 bg-white/70 text-plum'}`}>
+      <div className="flex min-h-10 items-center gap-2">
+        <p className="min-w-0 flex-1 truncate text-sm">
+          {step > 0 && <b className="mr-1">Step {step} of 4 ·</b>}{line}
+        </p>
+        {primary}
+        <button aria-expanded={more} onClick={() => setMore((m) => !m)} className="min-h-10 shrink-0 px-1 text-xs font-semibold underline underline-offset-2">{more ? 'Less' : 'More'}</button>
+        <button aria-label="Hide the guide" onClick={() => demo.setGuide(false)} className="flex h-10 w-8 shrink-0 items-center justify-center"><X size={15} /></button>
+      </div>
+      {more && (
+        <div className="pb-2 text-sm">
+          <p className="opacity-90">{body}</p>
+          <p className="mt-1 text-xs opacity-75">You're trying the {vol ? 'volunteer' : 'nonprofit'} view as {me.name}, a fictional {vol ? 'volunteer' : 'organization'}.</p>
+          {extra && <div className="mt-2 flex flex-wrap gap-2">{extra}</div>}
+        </div>
+      )}
     </section>
   );
 }

@@ -32,80 +32,70 @@ export function Badges({ profile, dark }: { profile: Profile; dark?: boolean }) 
   );
 }
 
-// One prospect at a time. The facts needed to decide come first; photos and background are secondary.
+// One prospect at a time: photo first, then the title and the fit at a glance. The rest is in Show details.
 export function ProspectCard({ prospect, viewer, preview, readOnly }: { prospect: Prospect; viewer: 'volunteer' | 'nonprofit'; preview?: boolean; readOnly?: string }) {
   const { profile, posting } = prospect;
   const fromPosting = viewer === 'volunteer';
   const t = fromPosting ? posting.terms : profile.terms;
   const skills = (fromPosting ? posting.skills : profile.skills).map(optionLabel);
-  const time = fromPosting
-    ? [`${t.hoursPerWeek} hrs a week`, `${t.weeks} weeks`, t.format, `Proposed start ${fmtDate(t.startDate, 'MMM d')}`]
-    : [`Up to ${t.hoursPerWeek} hrs a week`, t.minWeeks === t.maxWeeks ? `${t.minWeeks} weeks` : `${t.minWeeks} to ${t.maxWeeks} weeks`, t.format, `Free from ${fmtDate(t.startDate, 'MMM d')}`];
+  const chips = fromPosting
+    ? [...skills, `${t.hoursPerWeek} hrs/wk · ${t.weeks} wks · ${t.format}`]
+    : [...skills, `Up to ${t.hoursPerWeek} hrs/wk · ${t.minWeeks === t.maxWeeks ? t.minWeeks : `${t.minWeeks}-${t.maxWeeks}`} wks · ${t.format}`];
   const pr = fromPosting && posting.prompts.first ? posting.prompts : profile.prompts;
-  const facts: [string, string][] = fromPosting
-    ? [['Why it matters', posting.prompts.second], ['What gets handed over', posting.prompts.third]]
-    : [["Best at", profile.prompts.first]];
-  const more: [string, string][] = fromPosting
-    ? [['What they do', pr.first]]
-    : [['Causes close to them', profile.prompts.second], ['Working with them looks like', profile.prompts.third]];
+  const details: [string, string][] = fromPosting
+    ? [['Why it matters', posting.prompts.second], ['What gets handed over', posting.prompts.third], ['Proposed start', fmtDate(t.startDate)], ['What they do', pr.first]]
+    : [['Best at', profile.prompts.first], ['Free from', fmtDate(t.startDate)], ['Causes close to them', profile.prompts.second], ['Working with them looks like', profile.prompts.third]];
   const photo = profile.photos[0];
-  const box = 'rounded-[2rem] bg-plum2 p-4 text-white';
   return (
-    <article aria-label={fromPosting ? `${posting.title}, ${profile.name}` : profile.name} className={box}>
-      <header>
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-white/75">{fromPosting ? profile.name : 'Volunteer'}</p>
-          {prospect.interestedInYou && <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-bold text-plum">Interested in you</span>}
-          {readOnly && <span className="rounded-full border border-white/40 px-2.5 py-0.5 text-xs">Browsing only</span>}
+    <article aria-label={fromPosting ? `${posting.title}, ${profile.name}` : profile.name} className="overflow-hidden rounded-[2rem] bg-plum2 text-white">
+      {/* On short screens (landscape phones, 200% zoom) the photo sits beside the title instead of above it. */}
+      <div className="[@media(max-height:500px)]:flex">
+        <div className="relative [@media(max-height:500px)]:w-2/5 [@media(max-height:500px)]:shrink-0">
+          <Tile name={profile.name} alt={`Photo from ${profile.name}${profile.fictional ? ' (fictional, AI-generated)' : ''}`} src={photo ? photoUrl(photo) : undefined}
+            className="aspect-[4/5] max-h-[max(7.5rem,calc(100dvh-28.5rem))] w-full text-7xl md:max-h-[max(7.5rem,min(32rem,calc(100dvh-26rem)))] [@media(max-height:500px)]:aspect-auto [@media(max-height:500px)]:h-full [@media(max-height:500px)]:max-h-none" />
+          <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+            {prospect.interestedInYou && <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-plum">Interested in you</span>}
+            {readOnly && <span className="rounded-full bg-plum/80 px-2.5 py-1 text-xs">Browsing only</span>}
+          </div>
+          {profile.fictional && photo && <span className="absolute bottom-2 left-2 rounded-full bg-plum/80 px-2.5 py-1 text-[11px]">Fictional · AI-generated photo</span>}
         </div>
-        <h2 className="mt-1 font-serif text-[2rem] leading-[1.05]">{fromPosting ? posting.title : profile.name}</h2>
-        {!fromPosting && profile.title && <p className="mt-1 text-sm text-white/90">{profile.title}</p>}
-      </header>
-      <dl className="mt-3 space-y-3">
-        {facts.filter(([, v]) => v).map(([k, v]) => (
-          <div key={k}><dt className="text-[11px] font-bold uppercase tracking-[0.15em] text-white/65">{k}</dt><dd className="mt-0.5 text-[15px] leading-snug">{v}</dd></div>
-        ))}
-      </dl>
-      <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="Skills and time">
-        {[...skills, ...time].map((c) => <li key={c} className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-plum">{c}</li>)}
-      </ul>
-      {!fromPosting && <p className="mt-3 text-xs text-white/75">{trackLine(profile)}</p>}
-      <Badges profile={profile} dark />
-      {prospect.interestedInYou && prospect.note && (
-        <div className="mt-3 rounded-2xl bg-white/10 p-3">
-          <p className="text-xs font-semibold text-white/75">Their message</p>
-          <p className="mt-1 whitespace-pre-wrap font-serif text-lg italic leading-snug">"{prospect.note}"</p>
+        <div className="px-4 pt-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-white/75">{fromPosting ? profile.name : profile.title || 'Volunteer'}</p>
+          <h2 className="mt-0.5 font-serif text-[1.6rem] leading-[1.05] min-[380px]:text-[1.9rem]">{fromPosting ? posting.title : profile.name}</h2>
+          <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Skills and time">
+            {chips.map((c) => <li key={c} className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-plum min-[380px]:px-2.5 min-[380px]:text-xs">{c}</li>)}
+          </ul>
         </div>
-      )}
-      {photo && (
-        <figure className="mt-3">
-          <Tile name={profile.name} alt={`Photo from ${profile.name}${profile.fictional ? ' (fictional, AI-generated)' : ''}`} src={photoUrl(photo)} className="h-36 w-full rounded-2xl" />
-          {profile.fictional && <figcaption className="mt-1 text-[11px] text-white/65">Fictional · AI-generated photo</figcaption>}
-        </figure>
-      )}
-      <details className="mt-3 rounded-2xl border border-white/15 px-3">
-        <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold">Show details about {profile.name}</summary>
-        <div className="space-y-3 pb-3 text-sm">
-          {more.filter(([, v]) => v).map(([k, v]) => <p key={k}><b className="block text-[11px] uppercase tracking-[0.15em] text-white/65">{k}</b>{v}</p>)}
-          {fromPosting && <p className="text-xs text-white/75">{trackLine(profile)}</p>}
-          {(profile.quotes?.length ?? 0) > 0 && (
-            <div>
-              <p className="text-xs font-semibold">{fromPosting ? 'From volunteers who worked with them' : 'From nonprofits they worked with'}</p>
-              {profile.quotes!.map((q, j) => (
-                <blockquote key={j} className="mt-2">“{q.text}”<cite className="mt-1 block text-xs not-italic text-white/60">{q.author}, {q.projectTitle}{q.fictional ? ' · fictional demo quote' : ''}</cite></blockquote>
-              ))}
-            </div>
-          )}
-          {profile.photos.length > 1 && (
-            <div className="flex gap-2">{profile.photos.slice(1, 4).map((ph) => <Tile key={ph} name={profile.name} alt={`Photo from ${profile.name}`} src={photoUrl(ph)} className="h-24 w-24 rounded-xl" />)}</div>
-          )}
-        </div>
-      </details>
-      {!preview && (
-        <div className="pt-1 text-right">
-          <SafetyButton tone="dark" targetId={profile.id} targetName={profile.name} postingId={posting.id} />
-        </div>
-      )}
+      </div>
+      <div className="px-4 pb-4">
+        {prospect.interestedInYou && prospect.note && (
+          <p className="mt-3 whitespace-pre-wrap border-l-2 border-apricot pl-3 font-serif text-lg italic leading-snug text-white/90">"{prospect.note}"</p>
+        )}
+        <details className="mt-3 rounded-2xl border border-white/15 px-3">
+          <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold">Show details</summary>
+          <div className="space-y-3 pb-3 text-sm">
+            {details.filter(([, v]) => v).map(([k, v]) => <p key={k}><b className="block text-[11px] uppercase tracking-[0.15em] text-white/65">{k}</b>{v}</p>)}
+            <p className="text-xs text-white/75">{trackLine(profile)}</p>
+            <Badges profile={profile} dark />
+            {(profile.quotes?.length ?? 0) > 0 && (
+              <div>
+                <p className="text-xs font-semibold">{fromPosting ? 'From volunteers who worked with them' : 'From nonprofits they worked with'}</p>
+                {profile.quotes!.map((q, j) => (
+                  <blockquote key={j} className="mt-2">“{q.text}”<cite className="mt-1 block text-xs not-italic text-white/60">{q.author}, {q.projectTitle}{q.fictional ? ' · fictional demo quote' : ''}</cite></blockquote>
+                ))}
+              </div>
+            )}
+            {profile.photos.length > 1 && (
+              <div className="flex gap-2">{profile.photos.slice(1, 4).map((ph) => <Tile key={ph} name={profile.name} alt={`Photo from ${profile.name}`} src={photoUrl(ph)} className="h-24 w-24 rounded-xl" />)}</div>
+            )}
+          </div>
+        </details>
+        {!preview && (
+          <div className="pt-1 text-right">
+            <SafetyButton tone="dark" targetId={profile.id} targetName={profile.name} postingId={posting.id} />
+          </div>
+        )}
+      </div>
     </article>
   );
 }
