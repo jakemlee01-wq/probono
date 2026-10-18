@@ -12,8 +12,13 @@ export default function Landing() {
           <Link href="/sign-in" className="min-h-11 px-2 py-3 text-sm font-semibold underline underline-offset-4">Sign in</Link>
         </header>
         <main>
-          <section className="pt-8">
-            <h1 className="font-serif text-[1.85rem] leading-[1.12] min-[380px]:text-[2.1rem]">
+          <section className="pt-4">
+            <figure className="relative">
+              <img src={`${import.meta.env.BASE_URL}assets/demo-photos/northside-team.jpg`} width={825} height={1024} alt="A small nonprofit team working around a table (fictional, AI-generated)"
+                className="h-[clamp(8rem,24dvh,16rem)] w-full rounded-3xl bg-plum2 object-cover" />
+              <figcaption className="absolute bottom-2 left-2 rounded-full bg-plum/80 px-2.5 py-1 text-[11px]">Fictional · AI-generated photo</figcaption>
+            </figure>
+            <h1 className="mt-5 font-serif text-[1.85rem] leading-[1.12] min-[380px]:text-[2.1rem]">
               probono matches Twin Cities nonprofits with accounting and finance volunteers for small, unpaid projects.
             </h1>
             <div className="mt-6"><DemoEntry /></div>
