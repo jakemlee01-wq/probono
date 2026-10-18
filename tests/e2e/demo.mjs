@@ -19,6 +19,7 @@ const wait = (p, ms = 400) => p.waitForTimeout(ms);
 const btn = (p, name) => p.getByRole('button', { name, exact: true });
 const inView = async (loc, h) => { const b = await loc.boundingBox(); return !!b && b.y >= 0 && b.y + b.height <= h; };
 const guide = (p) => p.getByRole('region', { name: 'Demo guide' });
+const shortcut = (p) => p.getByRole('region', { name: 'Demo shortcut' });
 const acceptIn = async (p, v) => {
   await dialog(p).locator('[name="confidentiality"]').check();
   await dialog(p).locator('[name="licensing"]').check();
@@ -38,7 +39,7 @@ for (const [w, h] of [[320, 568], [390, 844], [1280, 720]]) {
   await p.goto(base);
   await wait(p, 300);
   const h1 = p.getByRole('heading', { level: 1 });
-  ok(await inView(h1, h) && await inView(btn(p, 'Explore the demo'), h), `sentence and Explore the demo visible without scrolling at ${w}x${h}`);
+  ok(await inView(h1, h) && await inView(btn(p, 'Try the demo'), h), `sentence and Try the demo visible without scrolling at ${w}x${h}`);
   ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `no sideways scroll at ${w}x${h}`);
   await shot(p, `clarity-landing-${w}x${h}`);
   await p.context().close();
@@ -47,7 +48,7 @@ for (const [w, h] of [[320, 568], [390, 844], [1280, 720]]) {
 // 2. Guided story as Sally: one click in, no persona choice, nothing to type.
 const a = await visitor();
 await a.goto(base);
-await btn(a, 'Explore the demo').click();
+await btn(a, 'Try the demo').click();
 await wait(a, 500);
 ok((await a.getByRole('region', { name: 'Demo', exact: true }).textContent()).includes('as Sally'), 'bar says which fictional person');
 ok((await guide(a).boundingBox()).height <= 64, 'guide is one line');
@@ -61,7 +62,9 @@ await guide(a).getByRole('button', { name: 'Less' }).click();
   ok(ib.y < hb.y && hb.y < cb.y, 'photo first, then title, then chips');
   ok(ib.width >= 300, 'photo is full width: ' + ib.width);
   ok(cb.y + cb.height <= bb.y, 'title and chips visible above the action bar without scrolling (390x844)');
-  ok(!(await a.getByText('Why it matters').isVisible()), 'longer text moved into Show details');
+  ok(await a.getByText('Done when:').first().isVisible() && await a.getByText('A one-page budget template we can update').first().isVisible(), 'outcome and done-when on the card face');
+  ok(!(await a.getByText('Show details').count()), 'no expanders on the card');
+  ok(await a.getByText('Nonprofit wants you').first().isVisible(), 'clear interest badge');
   ok(await a.getByText('Fictional · AI-generated photo').first().isVisible(), 'caption on the photo');
 }
 ok(await guide(a).getByText('Step 1 of 4').first().isVisible(), 'guide: step 1');
@@ -72,23 +75,23 @@ await dialog(a).getByRole('button', { name: 'Make it mutual' }).click();
 await wait(a, 500);
 await dialog(a).getByRole('button', { name: 'Open project' }).click();
 await wait(a);
-ok(await guide(a).getByText('Step 2 of 4').first().isVisible(), 'guide: step 2');
+ok(!(await guide(a).count()), 'guide stays dismissed after leaving the first screen');
 ok(!(await a.getByText(/still needed before anyone can accept/).count()), 'agreement arrives prepared, nothing to type');
 ok(await a.getByText('Waiting for your review', { exact: true }).first().isVisible(), 'state label: waiting for your review');
 await shot(a, 'clarity-02-agree', true);
 await btn(a, 'Review agreement').click();
 await acceptIn(a, 1);
 ok(await a.getByText('Waiting for the other side', { exact: true }).first().isVisible(), 'state label: waiting for the other side');
-await guide(a).getByRole('button', { name: 'Simulate Eastside Food Shelf accepting' }).click();
+await shortcut(a).getByRole('button', { name: 'Simulate Eastside Food Shelf accepting' }).click();
 await wait(a, 500);
 ok(await a.getByRole('heading', { name: 'Project confirmed' }).isVisible(), 'confirmed after the labeled simulation');
 await dialog(a).getByRole('button', { name: 'Open project' }).click();
 await wait(a);
 ok(await a.getByText(/Confirmed, starts/).first().isVisible(), 'state label: confirmed, starts date');
 const agreedStart = await a.getByText(/A simple annual budget template · /).first().textContent();
-ok(await guide(a).getByText('Step 3 of 4').first().isVisible(), 'guide: step 3');
+ok(!(await guide(a).count()), 'guide still dismissed');
 await shot(a, 'clarity-03-confirmed', true);
-for (let i = 0; i < 3 && await guide(a).getByRole('button', { name: 'Skip ahead one week' }).count(); i++) { await guide(a).getByRole('button', { name: 'Skip ahead one week' }).click(); await wait(a, 400); }
+for (let i = 0; i < 3 && await shortcut(a).getByRole('button', { name: 'Skip ahead one week' }).count(); i++) { await shortcut(a).getByRole('button', { name: 'Skip ahead one week' }).click(); await wait(a, 400); }
 ok(await a.getByText('Active', { exact: true }).first().isVisible(), 'state label: active after the demo clock moves');
 ok((await a.getByText(/A simple annual budget template · /).first().textContent()) === agreedStart, 'demo clock does not change agreed dates: ' + agreedStart);
 ok(await a.getByText("Thanks for taking this on!").first().isVisible() || true, 'sample message present');
@@ -107,31 +110,32 @@ ok(await dialog(a).getByText('completes when the other side adds theirs').first(
 await dialog(a).locator('[name="note"]').fill('Template delivered and walked through with Ruth.');
 await dialog(a).getByRole('button', { name: 'Save closing note' }).click();
 await wait(a, 500);
-ok(await guide(a).getByText('Step 4 of 4').first().isVisible(), 'guide: step 4');
-await guide(a).getByRole('button', { name: "Simulate Eastside Food Shelf's closing note" }).click();
+await shortcut(a).getByRole('button', { name: "Simulate Eastside Food Shelf's closing note" }).click();
 await wait(a, 600);
 ok(await a.getByRole('heading', { name: 'Project complete' }).isVisible(), 'completed');
 await btn(a, 'OK').click();
 await wait(a);
-ok(await guide(a).getByText('Done').first().isVisible(), 'guide: done');
+ok(await shortcut(a).isVisible(), 'finish offers next steps');
 await shot(a, 'clarity-05-done', true);
-await guide(a).getByRole('button', { name: 'Explore as a nonprofit' }).click();
+await shortcut(a).getByRole('button', { name: 'See it as the nonprofit' }).click();
 await wait(a, 500);
 await okNotice(a);
-ok(await a.getByText('Completed', { exact: false }).first().isVisible() && (await guide(a).textContent()).includes("Eastside's side"), 'nonprofit view of the same story');
+ok(await a.getByText('Completed', { exact: false }).first().isVisible(), 'nonprofit view of the same story');
 await a.getByRole('button', { name: /^Sally/ }).first().click();
 await wait(a);
 ok(await a.getByText('Template delivered and walked through with Ruth.').first().isVisible(), 'same closing record from the nonprofit side');
 ok(await a.getByText(/Messages are closed because this project has ended/).first().isVisible(), 'closed project explains closed messaging');
 await shot(a, 'clarity-06-nonprofit-record', true);
-await guide(a).getByRole('button', { name: 'Back to Sally' }).click();
+await shortcut(a).getByRole('button', { name: 'Back to Sally' }).click();
 await wait(a);
 
 // 3. Restart from completed refreshes everything at once.
 await btn(a, 'Explore demo').click();
 await dialog(a).getByRole('button', { name: 'Restart demo' }).click();
 await wait(a, 500);
-ok(await guide(a).getByText('Step 1 of 4').first().isVisible(), 'restart from completed: back to step 1 immediately');
+await a.getByRole('button', { name: 'Match' }).click();
+await wait(a);
+ok(await a.getByText('Nonprofit wants you').first().isVisible(), 'restart from completed: back to the start immediately');
 
 // 4. Free exploration: pause, role switch, both confirmation orders, edits invalidate, stop.
 await a.getByRole('button', { name: 'Profile' }).click();
@@ -145,7 +149,7 @@ ok(!(await a.getByText('Paused', { exact: true }).count()), 'restart from paused
 
 await persona(a, 'Northside');
 await okNotice(a);
-ok(await a.getByText('Interested in you').first().isVisible(), 'Northside sees Marcus interested');
+ok(await a.getByText('Wants to help you').first().isVisible(), 'Northside sees Marcus interested');
 await btn(a, 'Show interest').click();
 await dialog(a).getByRole('button', { name: 'Make it mutual' }).click();
 await wait(a, 500);
@@ -184,7 +188,7 @@ await acceptIn(a, 2);
 ok(await a.getByRole('heading', { name: 'Project confirmed' }).isVisible(), 'volunteer-second confirmation works');
 await dialog(a).getByRole('button', { name: 'Open project' }).click();
 await wait(a);
-await a.getByRole('button', { name: 'Discover' }).click();
+await a.getByRole('button', { name: 'Match' }).click();
 await wait(a);
 ok(await a.getByText('Browsing only').first().isVisible() || await a.getByText('Nothing else to browse right now').first().isVisible(), 'Discover during a project: read-only browsing or an honest empty state');
 ok(await btn(a, 'Go to project').isVisible(), 'Discover offers Go to project');
@@ -230,7 +234,7 @@ await wait(a);
 await btn(a, 'Pass').click();
 await dialog(a).getByRole('button', { name: 'Pass' }).click();
 await wait(a, 500);
-ok((await guide(a).textContent()).includes('ended early'), 'pass ends the guided story with a restart path');
+ok(await a.getByText('Passed', { exact: true }).first().isVisible(), 'pass closes the proposed project');
 
 // Exit and come back: resume or start over, never silently mid-story.
 await btn(a, 'Exit demo').click();
@@ -244,7 +248,7 @@ ok(a.url().endsWith('#/') || await btn(a, 'Resume your demo').isVisible() || awa
 {
   const q = await visitor(320, 568);
   await q.goto(base);
-  await btn(q, 'Explore the demo').click();
+  await btn(q, 'Try the demo').click();
   await wait(q, 500);
   const hb = await q.getByRole('heading', { name: 'A simple annual budget template' }).boundingBox();
   const cb = await q.getByRole('list', { name: 'Skills and time' }).boundingBox();
@@ -258,7 +262,7 @@ ok(a.url().endsWith('#/') || await btn(a, 'Resume your demo').isVisible() || awa
 // Second visitor is unaffected by all of the above.
 const b = await visitor();
 await b.goto(base);
-await btn(b, 'Explore the demo').click();
+await btn(b, 'Try the demo').click();
 await wait(b, 400);
 ok(await guide(b).getByText('Step 1 of 4').first().isVisible(), 'another browser starts fresh');
 

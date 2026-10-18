@@ -6,6 +6,7 @@ import { Btn, Field, Modal, inputCls } from './bits';
 import { Chat } from './chat';
 import { AcceptSheet, AgreementEditor, AgreementView, ExportButton } from './agreement';
 import { SafetyButton } from './safety';
+import { DemoNext } from './demo';
 import { useAct } from '@/lib/act';
 import { fmtDate, fmtInstant, projectLabel } from '@/lib/util';
 import { appNow } from '@/lib/demo-store';
@@ -91,6 +92,7 @@ function ProjectTab({ project, me, demo }: { project: Project; me: Profile; demo
 
   return (
     <div className="space-y-5">
+      <DemoNext project={project} me={me} />
       {!started && <p className="rounded-2xl bg-sage/25 p-4 text-sm">The project starts {fmtDate(project.startDate)}. Use the time to finish the kickoff checklist.</p>}
       {changeProposed && (
         <section className={`${card} border-apricot bg-apricot/15`}>
@@ -334,6 +336,7 @@ export function ProjectSummary({ project, me }: { project: Project; me: Profile 
   const mine = vol ? project.closing.volunteer : project.closing.nonprofit;
   return (
     <div className="mx-auto w-full max-w-lg space-y-5 text-plum">
+      <DemoNext project={project} me={me} />
       <p className="text-xs font-bold uppercase tracking-[0.2em] text-plum/65">{status.label}</p>
       <h1 className="font-serif text-4xl leading-none">{other.name}</h1>
       <p className="text-sm text-plum/75">{project.agreement.title}{project.endedAt ? ` · ${fmtDate(project.endedAt)}` : ''}</p>

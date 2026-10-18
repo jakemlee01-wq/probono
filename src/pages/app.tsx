@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Redirect, useLocation } from 'wouter';
-import { Compass, FolderOpen, UserRound, WifiOff } from 'lucide-react';
+import { FolderOpen, HeartHandshake, UserRound, WifiOff } from 'lucide-react';
 import type { AppNotification, AppState, Profile } from '@shared/types';
 import { Btn, ErrorBox, Modal, Skeleton } from '@/components/bits';
 import { Discovery } from '@/components/discovery';
@@ -48,6 +48,9 @@ function Shell() {
     if (!sel && me?.kind === 'nonprofit' && state?.postings.length) setSel(state.postings.find((p) => p.status !== 'Complete')?.id ?? state.postings[0].id);
   }, [sel, me?.kind, state]);
   useEffect(() => { window.scrollTo(0, 0); }, [tab, projectId]);
+  // The demo guide shows once: leaving the first screen dismisses it for good (Explore demo can bring it back).
+  const firstTab = useRef(tab);
+  useEffect(() => { if (demo && tab !== firstTab.current && demoStore.guideOn()) demoStore.setGuide(false); }, [tab, demo]);
   useEffect(() => { if (q.error instanceof ApiError && q.error.status === 401) supabase.auth.signOut(); }, [q.error]);
 
   if (!state && !q.isError) return <div className="min-h-[100dvh] bg-plum p-6" aria-busy="true"><Skeleton className="mx-auto mt-16 h-[60dvh] max-w-md text-white" /></div>;
@@ -96,7 +99,7 @@ function Shell() {
       </main>
       <nav aria-label="Main" className={`pb-safe fixed inset-x-0 bottom-0 z-30 border-t ${dark ? 'border-white/15 bg-plum' : 'border-plum/15 bg-cream'}`}>
         <div className="mx-auto grid h-16 max-w-2xl grid-cols-3">
-          {([['discover', 'Discover', Compass, '/app'], ['projects', 'Projects', FolderOpen, '/app/projects'], ['profile', 'Profile', UserRound, '/app/profile']] as const).map(([k, l, I, href]) => (
+          {([['discover', 'Match', HeartHandshake, '/app'], ['projects', 'Projects', FolderOpen, '/app/projects'], ['profile', 'Profile', UserRound, '/app/profile']] as const).map(([k, l, I, href]) => (
             <button key={k} aria-current={tab === k ? 'page' : undefined} onClick={() => go(href)} className={`relative flex flex-col items-center justify-center gap-0.5 text-xs font-semibold ${tab === k ? '' : 'opacity-65'}`}>
               <I size={20} aria-hidden />{l}
               {k === 'projects' && needsMe && <span className="absolute right-[calc(50%-1.4rem)] top-2 h-2.5 w-2.5 rounded-full bg-apricot" aria-label="needs your action" />}

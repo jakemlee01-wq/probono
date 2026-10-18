@@ -40,7 +40,7 @@ export function Projects({ state, me, openId, open, goDiscover }: { state: AppSt
         <div className="rounded-3xl border border-dashed border-plum/30 p-8 text-center">
           <p className="font-serif text-2xl">No projects yet</p>
           <p className="mt-2 text-sm text-plum/70">When you and {me.kind === 'volunteer' ? 'a nonprofit' : 'a volunteer'} are both interested, the proposed project shows up here.</p>
-          <Btn className="mt-4" onClick={goDiscover}>Go to Discover</Btn>
+          <Btn className="mt-4" onClick={goDiscover}>Go to Match</Btn>
         </div>
       )}
       {live.length > 0 && <List title="In progress" items={live} me={me} open={open} />}

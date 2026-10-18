@@ -150,6 +150,14 @@ export function demoDb(now: number): Db {
     posting('northside-2024-budget', 'northside', 'Program budget refresh', ['budgeting'], postingTerms(-200, 5), 'Complete'),
   ];
 
+  const doneWhen: Record<string, string> = {
+    'eastside-budget': 'Ruth updates it for next quarter without help.',
+    'northside-reports': 'Dana runs one month-end from the templates on her own.',
+    'northside-budget': 'The board finance committee signs off on it.',
+    'riverside-netsuite': 'Maya runs the grant report for one month on her own.',
+  };
+  for (const p of postings) if (doneWhen[p.id]) p.doneWhen = doneWhen[p.id];
+
   const pairs: Pair[] = [
     { id: 'eastside-budget-sally', postingId: 'eastside-budget', volunteerId: 'sally', status: 'interest', data: {
       nonprofitInterested: true, nonprofitInterestAt: new Date(now - 3600_000 * 20).toISOString(), acknowledgements: {},

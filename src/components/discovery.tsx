@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import type { AppState, Profile } from '@shared/types';
 import { LIMITS, textError } from '@shared/rules';
 import { ProspectCard } from './prospect-card';
@@ -60,7 +60,7 @@ export function Discovery({ state, me, postingId, goProfile, goProject }: { stat
             <button disabled={pending} onClick={() => run({ action: 'not_now', ...ids }, { quiet: true })} className="min-h-12 flex-1 py-4 text-sm font-semibold text-white/85 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-apricot disabled:opacity-50">Not now</button>
             <div className="w-px bg-white/25" />
             <button disabled={pending} onClick={() => setSheet(true)} className="flex min-h-12 flex-1 items-center justify-center gap-2 bg-white py-4 text-sm font-semibold text-plum hover:bg-cream focus-visible:outline-2 focus-visible:outline-apricot disabled:opacity-50">
-              <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full border border-plum"><Plus size={12} /></span>Show interest
+              <Heart size={16} aria-hidden />Show interest
             </button>
           </div>
         )}
@@ -74,6 +74,7 @@ export function Discovery({ state, me, postingId, goProfile, goProject }: { stat
                 ? `Say why this looks like a fit. At least ${LIMITS.note.min} characters. This uses 1 of the ${notesLeft} interest messages remaining for this posting; they don't reset.`
                 : 'A message is optional, but a line about why this work speaks to you helps.'}
           </p>
+          {free && p.note && <p className="mb-3 border-l-2 border-apricot pl-3 font-serif italic">"{p.note}"<span className="block text-xs not-italic text-plum/60">{p.profile.name}</span></p>}
           {isNp && !free && notesLeft <= 0 ? (
             <p role="alert" className="rounded-2xl bg-apricot/25 p-3 text-sm">This posting has used its five interest messages. Volunteers can still show interest in you, and replying to them is free.</p>
           ) : (

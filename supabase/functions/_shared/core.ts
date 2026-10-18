@@ -134,7 +134,7 @@ function upgradePosting(p: Posting): Posting {
 export function draftAgreement(posting: Posting, now: number): Agreement {
   return {
     title: posting.title, nonprofitContact: '', problem: posting.prompts.second ?? '', outcome: posting.prompts.third ?? '',
-    deliverables: '', acceptance: '', inScope: '', exclusions: '', inputs: '',
+    deliverables: '', acceptance: posting.doneWhen ?? '', inScope: '', exclusions: '', inputs: '',
     hoursPerWeek: posting.terms.hoursPerWeek, weeks: posting.terms.weeks, format: posting.terms.format,
     proposedStart: posting.terms.startDate.slice(0, 10), accessLevel: 'none', accessSystems: '', accessGrantedBy: '', accessRemovedBy: '',
     checkInPlan: '', version: 1, editedBy: 'system', editedByName: 'probono', editedAt: new Date(now).toISOString(),
@@ -340,7 +340,7 @@ export async function runCore(db: Db, ctx: Ctx, action?: ActionInput, selectedPo
       case 'update_posting': {
         need(self.kind === 'nonprofit' && a.posting, 'A nonprofit posting is required.');
         const input = a.posting;
-        const draft = { title: clean(input.title), skills: input.skills ?? [], terms: input.terms, prompts: { first: clean(input.prompts?.first), second: clean(input.prompts?.second), third: clean(input.prompts?.third) } };
+        const draft = { title: clean(input.title), doneWhen: clean(input.doneWhen), skills: input.skills ?? [], terms: input.terms, prompts: { first: clean(input.prompts?.first), second: clean(input.prompts?.second), third: clean(input.prompts?.third) } };
         firstError(postingErrors(draft));
         if (a.action === 'create_posting') {
           const p: Posting = { ...draft, id: ctx.uuid(), orgId: self.id, status: 'Open', notesLeft: LIMITS.interestNotesPerPosting };
