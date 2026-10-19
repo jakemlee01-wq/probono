@@ -1,7 +1,6 @@
 import type { Profile, Prospect, Terms } from '@shared/types';
 import { optionLabel } from '@shared/rules';
 import { Tile } from './bits';
-import { SafetyButton } from './safety';
 import { badgeText, fmtDate, photoUrl } from '@/lib/util';
 
 export function termsLine(t: Terms) {
@@ -54,14 +53,14 @@ export function ProspectCard({ prospect, viewer, preview, readOnly }: { prospect
       <div className="[@media(max-height:500px)]:flex">
         <div className="relative [@media(max-height:500px)]:w-2/5 [@media(max-height:500px)]:shrink-0">
           <Tile name={profile.name} alt={`Photo from ${profile.name}${profile.fictional ? ' (fictional, AI-generated)' : ''}`} src={photo ? photoUrl(photo) : undefined}
-            className="aspect-[4/5] max-h-[max(6.5rem,calc(100dvh-34rem))] w-full text-7xl md:max-h-[max(6.5rem,min(30rem,calc(100dvh-32rem)))] [@media(max-height:500px)]:aspect-auto [@media(max-height:500px)]:h-full [@media(max-height:500px)]:max-h-none" />
+            className="h-[clamp(9rem,calc(100dvh-31.5rem),45dvh)] w-full text-7xl [@media(max-height:500px)]:h-full [@media(max-height:500px)]:min-h-0" />
           <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-            {prospect.interestedInYou && <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-plum">{badge}</span>}
+            {prospect.interestedInYou && !fromPosting && <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-plum">{badge}</span>}
             {readOnly && <span className="rounded-full bg-plum/80 px-2.5 py-1 text-xs">Browsing only</span>}
           </div>
-          {profile.fictional && photo && <span className="absolute bottom-2 left-2 rounded-full bg-plum/80 px-2.5 py-1 text-[11px]">Fictional · AI-generated photo</span>}
+          {profile.fictional && photo && <span className="absolute bottom-2 right-2 rounded-full bg-plum/45 px-2 py-0.5 text-[10px] text-white/80">Fictional · AI-generated photo</span>}
         </div>
-        <div className="px-4 pb-3 pt-3">
+        <div className="px-4 pb-3 pt-2.5">
           <p className="text-xs font-semibold uppercase tracking-[0.15em] text-white/75">{fromPosting ? profile.name : profile.title || 'Volunteer'}</p>
           <h2 className="mt-0.5 font-serif text-[1.6rem] leading-[1.05] min-[380px]:text-[1.9rem]">{fromPosting ? posting.title : profile.name}</h2>
           <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Skills and time">
@@ -69,11 +68,6 @@ export function ProspectCard({ prospect, viewer, preview, readOnly }: { prospect
           </ul>
           {outcome && <p className="mt-2 line-clamp-2 text-sm leading-snug text-white/90">{outcome}</p>}
           {doneWhen && <p className="mt-1 line-clamp-2 text-sm leading-snug text-white/90"><b>Done when:</b> {doneWhen}</p>}
-          {!preview && (
-            <div className="text-right">
-              <SafetyButton tone="dark" targetId={profile.id} targetName={profile.name} postingId={posting.id} />
-            </div>
-          )}
         </div>
       </div>
     </article>
