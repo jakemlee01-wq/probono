@@ -81,7 +81,7 @@ export function Discovery({ state, me, postingId, goProfile, goProject }: { stat
             <>
               <Field label={needsNote ? 'Your message' : 'Message (optional)'} required={needsNote} name="note" count={note} max={needsNote ? LIMITS.note.max : LIMITS.optionalNote.max}
                 error={tried ? noteErr : ''} hint={needsNote ? `${Math.max(0, LIMITS.note.min - note.trim().length)} more characters needed` : undefined}>
-                {(f) => <textarea {...f} name="note" data-autofocus rows={4} className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} placeholder={needsNote ? 'What made you want to work with them?' : 'Optional'} />}
+                {(f) => <textarea {...f} name="note" rows={4} className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} placeholder={needsNote ? 'What made you want to work with them?' : 'Optional'} />}
               </Field>
               <Btn className="mt-4 w-full" disabled={pending} onClick={send}>{pending ? 'Sending…' : free ? 'Make it mutual' : 'Send'}</Btn>
             </>
