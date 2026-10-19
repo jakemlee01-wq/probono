@@ -92,6 +92,7 @@ ok(await guide(a).getByText('Step 1 of 4').first().isVisible(), 'guide: step 1')
 ok(await a.getByRole('heading', { name: 'A simple annual budget template' }).isVisible(), 'card leads with the work, not a face');
 await shot(a, 'clarity-01-find');
 await btn(a, 'Show interest').click();
+ok(await a.evaluate(() => !['TEXTAREA', 'INPUT'].includes(document.activeElement?.tagName ?? '')), 'opening Show interest does not focus the text box (no keyboard)');
 await dialog(a).getByRole('button', { name: 'Make it mutual' }).click();
 await wait(a, 500);
 await dialog(a).getByRole('button', { name: 'Open project' }).click();
