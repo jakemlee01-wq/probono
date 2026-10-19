@@ -51,10 +51,32 @@ await a.goto(base);
 await btn(a, 'Try the demo').click();
 await wait(a, 500);
 ok((await a.getByRole('region', { name: 'Demo', exact: true }).textContent()).includes('as Sally'), 'bar says which fictional person');
-ok((await guide(a).boundingBox()).height <= 64, 'guide is one line');
-await guide(a).getByRole('button', { name: 'More' }).click();
+ok((await guide(a).boundingBox()).height <= 40, 'guide is one slim line, collapsed');
+await guide(a).locator('button[aria-expanded]').click();
 ok((await guide(a).textContent()).includes("You're trying the volunteer view as Sally"), 'More explains the role');
-await guide(a).getByRole('button', { name: 'Less' }).click();
+await guide(a).locator('button[aria-expanded]').click();
+{
+  // At 390x844: photo, title, tags, Done when, and both buttons on one screen, nothing overlapping.
+  const els = {
+    photo: a.getByRole('img', { name: /Photo from Eastside/ }),
+    title: a.getByRole('heading', { name: 'A simple annual budget template' }),
+    tags: a.getByRole('list', { name: 'Skills and time' }),
+    done: a.getByText('Done when:').first(),
+    notNow: a.getByRole('button', { name: 'Not now', exact: true }),
+    show: a.getByRole('button', { name: 'Show interest', exact: true }),
+  };
+  const box = {};
+  for (const [k, l] of Object.entries(els)) box[k] = await l.boundingBox();
+  const nav = await a.getByRole('navigation', { name: 'Main' }).boundingBox();
+  for (const [k, b] of Object.entries(box)) ok(b && b.y >= 0 && b.y + b.height <= nav.y, `${k} fully visible above the tab bar at 390x844`);
+  const order = ['photo', 'title', 'tags', 'done', 'show'];
+  for (let i = 1; i < order.length; i++) ok(box[order[i - 1]].y + box[order[i - 1]].height <= box[order[i]].y + 1, `${order[i - 1]} sits above ${order[i]} without overlap`);
+  ok(box.photo.height >= 844 * 0.38 && box.photo.height <= 844 * 0.46, 'photo is about 40% of the screen: ' + Math.round(box.photo.height));
+  ok(box.photo.width >= 350, 'photo spans the card');
+  ok(!(await a.getByText('Nonprofit wants you').count()), 'no badge on the photo');
+  ok(!(await a.getByRole('main').getByText('Report or block').count()), 'no Report or block on the Match card');
+  await shot(a, 'match-390x844');
+}
 {
   const img = a.getByRole('img', { name: /Photo from Eastside/ }), h2 = a.getByRole('heading', { name: 'A simple annual budget template' });
   const chips = a.getByRole('list', { name: 'Skills and time' }), bar = a.getByRole('button', { name: 'Show interest', exact: true });
@@ -64,7 +86,6 @@ await guide(a).getByRole('button', { name: 'Less' }).click();
   ok(cb.y + cb.height <= bb.y, 'title and chips visible above the action bar without scrolling (390x844)');
   ok(await a.getByText('Done when:').first().isVisible() && await a.getByText('A one-page budget template we can update').first().isVisible(), 'outcome and done-when on the card face');
   ok(!(await a.getByText('Show details').count()), 'no expanders on the card');
-  ok(await a.getByText('Nonprofit wants you').first().isVisible(), 'clear interest badge');
   ok(await a.getByText('Fictional · AI-generated photo').first().isVisible(), 'caption on the photo');
 }
 ok(await guide(a).getByText('Step 1 of 4').first().isVisible(), 'guide: step 1');
@@ -135,7 +156,7 @@ await dialog(a).getByRole('button', { name: 'Restart demo' }).click();
 await wait(a, 500);
 await a.getByRole('button', { name: 'Match' }).click();
 await wait(a);
-ok(await a.getByText('Nonprofit wants you').first().isVisible(), 'restart from completed: back to the start immediately');
+ok(await a.getByRole('heading', { name: 'A simple annual budget template' }).isVisible() && await guide(a).isVisible(), 'restart from completed: back to the start immediately');
 
 // 4. Free exploration: pause, role switch, both confirmation orders, edits invalidate, stop.
 await a.getByRole('button', { name: 'Profile' }).click();
@@ -243,6 +264,21 @@ ok(await btn(a, 'Resume your demo').isVisible() && await btn(a, 'Start over').is
 await a.goto(base + '#/app');
 await wait(a);
 ok(a.url().endsWith('#/') || await btn(a, 'Resume your demo').isVisible() || await a.getByRole('heading', { level: 1 }).isVisible(), 'after Exit, app screens do not keep acting as a fictional user');
+
+// iPhone Safari with toolbars showing (about 390x664): the whole card and both buttons still fit.
+{
+  const q = await visitor(390, 664);
+  await q.goto(base);
+  await btn(q, 'Try the demo').click();
+  await wait(q, 500);
+  const nav = await q.getByRole('navigation', { name: 'Main' }).boundingBox();
+  const sh = await q.getByRole('button', { name: 'Show interest', exact: true }).boundingBox();
+  const dn = await q.getByText('Done when:').first().boundingBox();
+  const ph = await q.getByRole('img', { name: /Photo from Eastside/ }).boundingBox();
+  ok(sh.y + sh.height <= nav.y && dn.y + dn.height <= sh.y && ph.y + ph.height <= dn.y, 'everything fits at 390x664 with the photo still leading: photo ' + Math.round(ph.height));
+  await shot(q, 'match-390x664');
+  await q.context().close();
+}
 
 // Small phone: photo, title and chips sit above the action bar.
 {

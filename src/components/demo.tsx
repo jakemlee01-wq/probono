@@ -133,21 +133,20 @@ export function DemoGuide({ state, me, dark }: { state: AppState; me: Profile; d
     primary = restart;
     body = 'The project was passed, stopped, or ran out of time. Restart to see it again.';
   }
+  // One slim line, collapsed by default. Tapping it shows the explanation and the step's action.
   return (
-    <section aria-label="Demo guide" className={`mx-auto mb-3 max-w-2xl rounded-2xl border px-3 py-1.5 ${dark ? 'border-white/25 bg-plum2 text-white' : 'border-plum/20 bg-white/70 text-plum'}`}>
-      <div className="flex min-h-10 items-center gap-2">
-        <p className="min-w-0 flex-1 truncate text-sm">
+    <section aria-label="Demo guide" className={`mx-auto mb-2 max-w-2xl rounded-full border px-3 ${more ? 'rounded-2xl pb-2' : ''} ${dark ? 'border-white/20 bg-white/5 text-white' : 'border-plum/15 bg-white/60 text-plum'}`}>
+      <div className="flex min-h-8 items-center gap-1">
+        <button aria-expanded={more} onClick={() => setMore((m) => !m)} className="min-h-8 min-w-0 flex-1 truncate text-left text-xs">
           {step > 0 && <b className="mr-1">Step {step} of 4 ·</b>}{line}
-        </p>
-        {primary}
-        <button aria-expanded={more} onClick={() => setMore((m) => !m)} className="min-h-10 shrink-0 px-1 text-xs font-semibold underline underline-offset-2">{more ? 'Less' : 'More'}</button>
-        <button aria-label="Hide the guide" onClick={() => demo.setGuide(false)} className="flex h-10 w-8 shrink-0 items-center justify-center"><X size={15} /></button>
+        </button>
+        <button aria-label="Hide the guide" onClick={() => demo.setGuide(false)} className="flex h-8 w-8 shrink-0 items-center justify-center opacity-70"><X size={13} /></button>
       </div>
       {more && (
-        <div className="pb-2 text-sm">
+        <div className="pt-1 text-sm">
           <p className="opacity-90">{body}</p>
           <p className="mt-1 text-xs opacity-75">You're trying the {vol ? 'volunteer' : 'nonprofit'} view as {me.name}, a fictional {vol ? 'volunteer' : 'organization'}.</p>
-          {extra && <div className="mt-2 flex flex-wrap gap-2">{extra}</div>}
+          {(primary || extra) && <div className="mt-2 flex flex-wrap gap-2">{primary}{extra}</div>}
         </div>
       )}
     </section>

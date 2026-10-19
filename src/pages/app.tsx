@@ -77,14 +77,14 @@ function Shell() {
           <WifiOff size={14} aria-hidden />{!online ? "You're offline. You're seeing the last saved view, and changes won't be sent until you're back." : "Can't reach probono right now. Retrying. Changes may not save."}
         </div>
       )}
-      <header className="relative z-10 mx-auto flex max-w-2xl items-center justify-between gap-2 px-5 pb-3 pt-4">
+      <header className="relative z-10 mx-auto flex max-w-2xl items-center justify-between gap-2 px-5 pb-1.5 pt-2">
         <span className="shrink-0 font-serif text-2xl">probono</span>
         <span className="flex min-w-0 items-center gap-1">
           <span className={`min-w-0 truncate rounded-full border px-3 py-1 text-xs font-semibold ${dark ? 'border-white/30 bg-white/10' : 'border-plum/30 bg-plum/5'}`}>{pill}</span>
           <Notifications items={state.notifications} unread={state.unread} dark={dark} onOpen={openNotice} />
         </span>
       </header>
-      <main className="relative z-10 mx-auto max-w-2xl px-4 pb-28 pt-2">
+      <main className="relative z-10 mx-auto max-w-2xl px-4 pb-28 pt-1">
         {demo && demoStore.guideOn() && <DemoGuide state={state} me={me} dark={dark} />}
         {tab === 'discover' && np && state.postings.length > 1 && (
           <div className="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4" role="group" aria-label="Choose a posting">
