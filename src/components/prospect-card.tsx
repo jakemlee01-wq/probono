@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Profile, Prospect, Terms } from '@shared/types';
 import { optionLabel } from '@shared/rules';
 import { Tile } from './bits';
@@ -33,7 +33,7 @@ export function Badges({ profile, dark }: { profile: Profile; dark?: boolean }) 
 }
 
 // One prospect at a time: photo, title, fit chips, and the outcome in a line. Nothing to expand.
-export function ProspectCard({ prospect, viewer, preview, readOnly }: { prospect: Prospect; viewer: 'volunteer' | 'nonprofit'; preview?: boolean; readOnly?: string }) {
+export function ProspectCard({ prospect, viewer, readOnly, overlay }: { prospect: Prospect; viewer: 'volunteer' | 'nonprofit'; readOnly?: string; overlay?: ReactNode }) {
   const { profile, posting } = prospect;
   const fromPosting = viewer === 'volunteer';
   const t = fromPosting ? posting.terms : profile.terms;
@@ -55,17 +55,21 @@ export function ProspectCard({ prospect, viewer, preview, readOnly }: { prospect
       <div className="[@media(max-height:500px)]:flex">
         <div className="relative [@media(max-height:500px)]:w-2/5 [@media(max-height:500px)]:shrink-0">
           <Photos profile={profile} />
-          <div className="pointer-events-none absolute left-3 top-6 flex flex-wrap gap-1.5">
+          {overlay && <div className="absolute inset-x-3 top-5 z-10">{overlay}</div>}
+          <div className={`pointer-events-none absolute left-3 flex flex-wrap gap-1.5 ${overlay ? 'top-16' : 'top-6'}`}>
             {prospect.interestedInYou && !fromPosting && <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-plum">{badge}</span>}
             {readOnly && <span className="rounded-full bg-plum/80 px-2.5 py-1 text-xs">Browsing only</span>}
           </div>
           {/* The title sits on the photo, over a plum fade, so the photo can be big. */}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-plum2 via-plum2/70 to-transparent px-4 pb-3 pt-14 [@media(max-height:500px)]:hidden">
-            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-white/85">{eyebrow}</p>
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="min-w-0 truncate text-xs font-semibold uppercase tracking-[0.15em] text-white/85">{eyebrow}</p>
+              {profile.fictional && profile.photos.length > 0 && <span className="shrink-0 text-[10px] text-white/70">Fictional · AI-generated photo</span>}
+            </div>
             <h2 className="mt-0.5 font-serif text-[1.6rem] leading-[1.05] min-[380px]:text-[1.9rem]">{title}</h2>
           </div>
         </div>
-        <div className="px-4 pb-3 pt-2.5">
+        <div className="px-4 pb-3 pt-1.5">
           <div className="hidden [@media(max-height:500px)]:block">
             <p className="text-xs font-semibold uppercase tracking-[0.15em] text-white/75">{eyebrow}</p>
             <h2 className="mt-0.5 mb-2 font-serif text-[1.6rem] leading-[1.05]">{title}</h2>
@@ -119,7 +123,6 @@ function Photos({ profile }: { profile: Profile }) {
         </div>
       )}
       {n > 1 && <span className="sr-only" aria-live="polite">{`Photo ${i + 1} of ${n}`}</span>}
-      {profile.fictional && photos[i] && <span className="pointer-events-none absolute right-3 top-5 rounded-full bg-plum/45 px-2 py-0.5 text-[10px] text-white/80">Fictional · AI-generated photo</span>}
     </div>
   );
 }
@@ -138,7 +141,7 @@ function useFitHeight() {
       if (!root || !nav || window.matchMedia('(max-height: 500px)').matches) { el.style.height = ''; return; }
       const slack = nav.getBoundingClientRect().top - 10 - (root.getBoundingClientRect().bottom + window.scrollY);
       const h = el.getBoundingClientRect().height;
-      const next = Math.round(Math.max(144, Math.min(h + slack, window.innerHeight * 0.6, el.getBoundingClientRect().width * 1.4)));
+      const next = Math.round(Math.max(144, Math.min(h + slack, window.innerHeight * 0.7, el.getBoundingClientRect().width * 1.6)));
       if (Math.abs(next - h) > 1) el.style.height = `${next}px`;
     };
     fit();

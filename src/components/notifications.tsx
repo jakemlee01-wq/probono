@@ -6,7 +6,7 @@ import { useAct } from '@/lib/act';
 import { fmtDate } from '@/lib/util';
 
 // In-app notices. They're stored on the server, so nothing is missed between visits.
-export function Notifications({ items, unread, dark, onOpen }: { items: AppNotification[]; unread: number; dark: boolean; onOpen: (n: AppNotification) => void }) {
+export function Notifications({ items, unread, dark, onOpen, onApricot }: { items: AppNotification[]; unread: number; dark: boolean; onOpen: (n: AppNotification) => void; onApricot?: boolean }) {
   const [open, setOpen] = useState(false);
   const { run } = useAct();
   const go = (n: AppNotification) => {
@@ -18,7 +18,7 @@ export function Notifications({ items, unread, dark, onOpen }: { items: AppNotif
     <>
       <button onClick={() => setOpen(true)} aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} className={`relative flex h-11 w-11 items-center justify-center rounded-full ${dark ? 'hover:bg-white/10' : 'hover:bg-plum/10'}`}>
         <Bell size={20} aria-hidden />
-        {unread > 0 && <span aria-hidden className="absolute right-1 top-1 min-w-5 rounded-full bg-apricot px-1 text-center text-[11px] font-bold leading-5 text-plum">{unread > 9 ? '9+' : unread}</span>}
+        {unread > 0 && <span aria-hidden className={`absolute right-1 top-1 min-w-5 rounded-full ${onApricot ? 'bg-plum text-cream' : 'bg-apricot text-plum'} px-1 text-center text-[11px] font-bold leading-5`}>{unread > 9 ? '9+' : unread}</span>}
       </button>
       {open && (
         <Modal title="Notifications" onClose={() => setOpen(false)}>
