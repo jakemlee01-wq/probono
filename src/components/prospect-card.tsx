@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { Profile, Prospect, Terms } from '@shared/types';
 import { optionLabel } from '@shared/rules';
 import { Tile } from './bits';
@@ -86,11 +86,13 @@ function Photos({ profile }: { profile: Profile }) {
   const photos = profile.photos.length ? profile.photos : [''];
   const [i, setI] = useState(0);
   const start = useRef<{ x: number; y: number } | null>(null);
+  const box = useFitHeight();
   const n = photos.length;
   const go = (d: number) => setI((v) => Math.min(n - 1, Math.max(0, v + d)));
   const label = (k: number) => `Photo from ${profile.name}${profile.fictional ? ' (fictional, AI-generated)' : ''}${n > 1 ? `, ${k + 1} of ${n}` : ''}`;
   return (
     <div
+      ref={box}
       className="relative h-[clamp(9rem,calc(100dvh-26rem),52dvh)] w-full touch-pan-y select-none [@media(max-height:500px)]:h-full [@media(max-height:500px)]:min-h-40"
       role={n > 1 ? 'group' : undefined}
       aria-roledescription={n > 1 ? 'carousel' : undefined}
@@ -120,4 +122,33 @@ function Photos({ profile }: { profile: Profile }) {
       {profile.fictional && photos[i] && <span className="pointer-events-none absolute right-3 top-5 rounded-full bg-plum/45 px-2 py-0.5 text-[10px] text-white/80">Fictional · AI-generated photo</span>}
     </div>
   );
+}
+
+// Size the photo to the space that is really there. Browsers disagree about screen height (in-app
+// browsers like LinkedIn's report less than they show), so measure the page instead: grow or shrink
+// the photo until the block marked data-fit ends just above the tab bar. The CSS height is the fallback.
+function useFitHeight() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      const root = el.closest('[data-fit]');
+      const nav = document.querySelector('nav[aria-label="Main"]');
+      if (!root || !nav || window.matchMedia('(max-height: 500px)').matches) { el.style.height = ''; return; }
+      const slack = nav.getBoundingClientRect().top - 10 - (root.getBoundingClientRect().bottom + window.scrollY);
+      const h = el.getBoundingClientRect().height;
+      const next = Math.round(Math.max(144, Math.min(h + slack, window.innerHeight * 0.6, el.getBoundingClientRect().width * 1.4)));
+      if (Math.abs(next - h) > 1) el.style.height = `${next}px`;
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(document.body);
+    const main = el.closest('main');
+    if (main) ro.observe(main); // the demo guide opening or closing moves the card
+    window.addEventListener('resize', fit);
+    window.visualViewport?.addEventListener('resize', fit);
+    return () => { ro.disconnect(); window.removeEventListener('resize', fit); window.visualViewport?.removeEventListener('resize', fit); };
+  }, []);
+  return ref;
 }
