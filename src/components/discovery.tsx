@@ -42,7 +42,7 @@ export function Discovery({ state, me, postingId, goProfile, goProject }: { stat
   };
 
   return (
-    <div className="mx-auto w-full max-w-md">
+    <div data-fit className="mx-auto w-full max-w-md">
       {isNp && posting && <p className="mb-2 text-xs text-white/75">{notesLeft} interest message{notesLeft === 1 ? '' : 's'} remaining for this posting</p>}
       <ProspectCard key={p.profile.id + p.posting.id} prospect={p} viewer={isNp ? 'nonprofit' : 'volunteer'} readOnly={full ? state.capacity.reason : undefined} />
       {/* Directly under the card, in the page flow, so nothing overlaps. */}

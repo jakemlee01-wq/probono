@@ -55,6 +55,7 @@ ok((await guide(a).boundingBox()).height <= 40, 'guide is one slim line, collaps
 await guide(a).locator('button[aria-expanded]').click();
 ok((await guide(a).textContent()).includes("You're trying the volunteer view as Sally"), 'More explains the role');
 await guide(a).locator('button[aria-expanded]').click();
+await wait(a, 200);
 {
   // At 390x844: photo, title, tags, Done when, and both buttons on one screen, nothing overlapping.
   const els = {
@@ -298,6 +299,23 @@ ok(a.url().endsWith('#/') || await btn(a, 'Resume your demo').isVisible() || awa
   const ph = await q.getByRole('img', { name: /Photo from Eastside/ }).boundingBox();
   ok(sh.y + sh.height <= nav.y && dn.y + dn.height <= sh.y && ph.y + ph.height <= dn.y && ph.height >= 220, 'everything fits at 390x664 with the photo still leading: photo ' + Math.round(ph.height));
   await shot(q, 'match-390x664');
+  await q.context().close();
+}
+
+// The photo fills the space that is really there, in any browser: buttons end just above the tab bar.
+// The last case breaks the CSS height on purpose, the way in-app browsers (LinkedIn) misreport screen height.
+for (const [w, h, broken] of [[390, 664], [390, 720], [390, 780], [390, 844], [430, 932], [390, 780, true]]) {
+  const q = await visitor(w, h);
+  if (broken) await q.addInitScript(() => document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = '[data-fit] .touch-pan-y{height:150px}'; document.head.append(st); }));
+  await q.goto(base);
+  await btn(q, 'Try the demo').click();
+  await wait(q, 600);
+  const nav = await q.getByRole('navigation', { name: 'Main' }).boundingBox();
+  const sh = await q.getByRole('button', { name: 'Show interest', exact: true }).boundingBox();
+  const ph = await q.getByRole('img', { name: /Photo from Eastside/ }).boundingBox();
+  const gap = nav.y - (sh.y + sh.height);
+  ok(gap >= 0 && gap <= 16, `${w}x${h}${broken ? ' (misreported height)' : ''}: buttons end just above the tab bar, gap ${Math.round(gap)}, photo ${Math.round(ph.height)}`);
+  if (broken) await shot(q, 'match-fit-misreported');
   await q.context().close();
 }
 
