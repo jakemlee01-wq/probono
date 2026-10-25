@@ -50,7 +50,7 @@ const a = await visitor();
 await a.goto(base);
 await btn(a, 'Try the demo').click();
 await wait(a, 500);
-ok((await a.getByRole('region', { name: 'Demo', exact: true }).textContent()).includes('as Sally'), 'bar says which fictional person');
+ok((await a.getByRole('region', { name: 'Demo', exact: true }).textContent()).includes('fictional Sally'), 'bar says which fictional person');
 ok((await guide(a).boundingBox()).height <= 40, 'guide is one slim line, collapsed');
 await guide(a).locator('button[aria-expanded]').click();
 ok((await guide(a).textContent()).includes("You're trying the volunteer view as Sally"), 'More explains the role');
@@ -73,7 +73,7 @@ await wait(a, 200);
   const order = ['photo', 'tags', 'done', 'show'];
   ok(box.title.y >= box.photo.y && box.title.y + box.title.height <= box.photo.y + box.photo.height, 'title sits on the photo');
   for (let i = 1; i < order.length; i++) ok(box[order[i - 1]].y + box[order[i - 1]].height <= box[order[i]].y + 1, `${order[i - 1]} sits above ${order[i]} without overlap`);
-  ok(box.photo.height >= 844 * 0.47 && box.photo.height <= 844 * 0.53, 'photo is about half the screen: ' + Math.round(box.photo.height));
+  ok(box.photo.height >= 844 * 0.5 && box.photo.height <= 844 * 0.7, 'photo is at least half the screen: ' + Math.round(box.photo.height));
   ok(box.photo.width >= 350, 'photo spans the card');
   ok(!(await a.getByText('Nonprofit wants you').count()), 'no badge on the photo');
   ok(!(await a.getByRole('main').getByText('Report or block').count()), 'no Report or block on the Match card');
@@ -304,7 +304,7 @@ ok(a.url().endsWith('#/') || await btn(a, 'Resume your demo').isVisible() || awa
 
 // The photo fills the space that is really there, in any browser: buttons end just above the tab bar.
 // The last case breaks the CSS height on purpose, the way in-app browsers (LinkedIn) misreport screen height.
-for (const [w, h, broken] of [[390, 664], [390, 720], [390, 780], [390, 844], [430, 932], [390, 780, true]]) {
+for (const [w, h, broken] of [[390, 664], [390, 700], [390, 720], [390, 780], [390, 844], [430, 932], [390, 780, true]]) {
   const q = await visitor(w, h);
   if (broken) await q.addInitScript(() => document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = '[data-fit] .touch-pan-y{height:150px}'; document.head.append(st); }));
   await q.goto(base);
@@ -315,7 +315,9 @@ for (const [w, h, broken] of [[390, 664], [390, 720], [390, 780], [390, 844], [4
   const ph = await q.getByRole('img', { name: /Photo from Eastside/ }).boundingBox();
   const gap = nav.y - (sh.y + sh.height);
   ok(gap >= 0 && gap <= 16, `${w}x${h}${broken ? ' (misreported height)' : ''}: buttons end just above the tab bar, gap ${Math.round(gap)}, photo ${Math.round(ph.height)}`);
+  if (h === 700) ok(ph.height >= h * 0.52, 'real iPhone Safari height (390x700): photo is over half the screen: ' + Math.round(ph.height));
   if (broken) await shot(q, 'match-fit-misreported');
+  if (h === 700) await shot(q, 'match-390x700-safari');
   await q.context().close();
 }
 

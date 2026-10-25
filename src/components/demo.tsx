@@ -29,17 +29,18 @@ export function DemoEntry() {
 }
 
 // Compact bar on every demo screen. Everything else lives in the Explore menu.
-export function DemoBar({ persona }: { persona: DemoPersonaId }) {
+export function DemoBar({ persona, children }: { persona: DemoPersonaId; children?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [, go] = useLocation();
   const name = DEMO_PERSONAS.find((p) => p.id === persona)?.name ?? persona;
   return (
     <>
       <div role="region" aria-label="Demo" className="relative z-40 flex min-h-11 items-center justify-between gap-2 bg-apricot px-3 text-xs text-plum">
-        <span className="min-w-0 truncate"><b>Demo</b> · fictional · as {name.split(' ')[0]}</span>
+        <span className="min-w-0 truncate"><span className="mr-1 hidden font-serif text-lg leading-none min-[360px]:inline">probono</span><b>Demo</b> · fictional {name.split(' ')[0]}</span>
         <span className="flex shrink-0 items-center">
-          <button aria-label="Explore demo" className="min-h-11 rounded-full px-2.5 font-semibold underline underline-offset-2" onClick={() => setOpen(true)}>Explore</button>
-          <button aria-label="Exit demo" className="min-h-11 rounded-full px-2.5 font-semibold underline underline-offset-2" onClick={() => { demo.exit(); go('/'); }}>Exit</button>
+          {children}
+          <button aria-label="Explore demo" className="min-h-11 rounded-full px-2 font-semibold underline underline-offset-2" onClick={() => setOpen(true)}>Explore</button>
+          <button aria-label="Exit demo" className="min-h-11 rounded-full px-2 font-semibold underline underline-offset-2" onClick={() => { demo.exit(); go('/'); }}>Exit</button>
         </span>
       </div>
       {open && <ExploreMenu persona={persona} onClose={() => setOpen(false)} />}
@@ -79,7 +80,7 @@ function ExploreMenu({ persona, onClose }: { persona: DemoPersonaId; onClose: ()
 
 // The guide through the story (find, agree, work, finish) is one line with the next action.
 // "More" opens the explanation and every option for that step.
-export function DemoGuide({ state, me, dark }: { state: AppState; me: Profile; dark: boolean }) {
+export function DemoGuide({ state, me, dark, overlay }: { state: AppState; me: Profile; dark: boolean; overlay?: boolean }) {
   const [loc, go] = useLocation();
   const [more, setMore] = useState(false);
   const { run, pending } = useAct();
@@ -99,7 +100,7 @@ export function DemoGuide({ state, me, dark }: { state: AppState; me: Profile; d
     body = `You're ${me.name}, outside the guided story. Try showing interest, editing an agreement, passing, or pausing.`;
   } else if (!p) {
     step = 1;
-    line = vol ? "Tap Show interest on Eastside's project." : 'Waiting for Sally. Switch to her in Explore demo.';
+    line = vol ? 'Tap Show interest below.' : 'Waiting for Sally. Switch to her in Explore demo.';
     body = vol ? 'Eastside Food Shelf needs a simple budget template, about 3 hours a week for 4 weeks. '
       : "You're Eastside Food Shelf. You posted a budget-template project and showed interest in Sally.";
   } else if (p.status === 'pending') {
@@ -135,7 +136,7 @@ export function DemoGuide({ state, me, dark }: { state: AppState; me: Profile; d
   }
   // One slim line, collapsed by default. Tapping it shows the explanation and the step's action.
   return (
-    <section aria-label="Demo guide" className={`mx-auto mb-2 max-w-2xl rounded-full border px-3 ${more ? 'rounded-2xl pb-2' : ''} ${dark ? 'border-white/20 bg-white/5 text-white' : 'border-plum/15 bg-white/60 text-plum'}`}>
+    <section aria-label="Demo guide" className={`${overlay ? 'border-white/25 bg-plum/80 text-white backdrop-blur-sm' : `mx-auto mb-2 max-w-2xl ${dark ? 'border-white/20 bg-white/5 text-white' : 'border-plum/15 bg-white/60 text-plum'}`} rounded-full border px-3 ${more ? 'rounded-2xl pb-2' : ''}`}>
       <div className="flex min-h-8 items-center gap-1">
         <button aria-expanded={more} onClick={() => setMore((m) => !m)} className="min-h-8 min-w-0 flex-1 truncate text-left text-xs">
           {step > 0 && <b className="mr-1">Step {step} of 4 ·</b>}{line}

@@ -71,21 +71,21 @@ function Shell() {
 
   return (
     <div className={`grain relative min-h-[100dvh] ${dark ? 'bg-plum text-white' : 'bg-cream text-plum'}`}>
-      {demo && <DemoBar persona={demo} />}
+      {demo && <DemoBar persona={demo}>{tab === 'discover' && <Notifications items={state.notifications} unread={state.unread} dark={false} onApricot onOpen={openNotice} />}</DemoBar>}
       {(!online || stale) && (
         <div role="status" className="relative z-40 flex items-center justify-center gap-2 bg-[#8a2f25] px-3 py-2 text-center text-xs text-cream">
           <WifiOff size={14} aria-hidden />{!online ? "You're offline. You're seeing the last saved view, and changes won't be sent until you're back." : "Can't reach probono right now. Retrying. Changes may not save."}
         </div>
       )}
-      <header className="relative z-10 mx-auto flex max-w-2xl items-center justify-between gap-2 px-5 pb-1.5 pt-2">
+      {!(demo && tab === 'discover') && <header className="relative z-10 mx-auto flex max-w-2xl items-center justify-between gap-2 px-5 pb-1.5 pt-2">
         <span className="shrink-0 font-serif text-2xl">probono</span>
         <span className="flex min-w-0 items-center gap-1">
           <span className={`min-w-0 truncate rounded-full border px-3 py-1 text-xs font-semibold ${dark ? 'border-white/30 bg-white/10' : 'border-plum/30 bg-plum/5'}`}>{pill}</span>
           <Notifications items={state.notifications} unread={state.unread} dark={dark} onOpen={openNotice} />
         </span>
-      </header>
-      <main className="relative z-10 mx-auto max-w-2xl px-4 pb-28 pt-1">
-        {demo && demoStore.guideOn() && <DemoGuide state={state} me={me} dark={dark} />}
+      </header>}
+      <main className={`relative z-10 mx-auto max-w-2xl px-4 pb-24 ${demo && tab === 'discover' ? 'pt-3' : 'pt-1'}`}>
+        {demo && demoStore.guideOn() && tab !== 'discover' && <DemoGuide state={state} me={me} dark={dark} />}
         {tab === 'discover' && np && state.postings.length > 1 && (
           <div className="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4" role="group" aria-label="Choose a posting">
             {state.postings.map((p) => (
@@ -93,12 +93,13 @@ function Shell() {
             ))}
           </div>
         )}
-        {tab === 'discover' && <Discovery state={state} me={me} postingId={active} goProfile={() => go('/app/profile')} goProject={(id) => go(`/app/projects/${id}`)} />}
+        {tab === 'discover' && <Discovery state={state} me={me} postingId={active} goProfile={() => go('/app/profile')} goProject={(id) => go(`/app/projects/${id}`)}
+          guide={demo && demoStore.guideOn() ? <DemoGuide state={state} me={me} dark overlay /> : null} />}
         {tab === 'projects' && <Projects state={state} me={me} openId={projectId} open={(id) => go(id ? `/app/projects/${id}` : '/app/projects')} goDiscover={() => go('/app')} />}
         {tab === 'profile' && <ProfileTab me={me} state={state} onWork={(id) => { setSel(id); go('/app'); }} onOpenProject={(id) => go(`/app/projects/${id}`)} />}
       </main>
       <nav aria-label="Main" className={`pb-safe fixed inset-x-0 bottom-0 z-30 border-t ${dark ? 'border-white/15 bg-plum' : 'border-plum/15 bg-cream'}`}>
-        <div className="mx-auto grid h-16 max-w-2xl grid-cols-3">
+        <div className="mx-auto grid h-14 max-w-2xl grid-cols-3">
           {([['discover', 'Match', HeartHandshake, '/app'], ['projects', 'Projects', FolderOpen, '/app/projects'], ['profile', 'Profile', UserRound, '/app/profile']] as const).map(([k, l, I, href]) => (
             <button key={k} aria-current={tab === k ? 'page' : undefined} onClick={() => go(href)} className={`relative flex flex-col items-center justify-center gap-0.5 text-xs font-semibold ${tab === k ? '' : 'opacity-65'}`}>
               <I size={20} aria-hidden />{l}

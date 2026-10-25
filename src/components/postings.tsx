@@ -45,7 +45,7 @@ export function Postings({ state, me, onWork, onOpenProject }: { state: AppState
       {preview && (
         <Modal onClose={() => setPreview(null)} title="How volunteers see it">
           <div className="-mx-2 rounded-3xl bg-plum p-2">
-            <ProspectCard preview viewer="volunteer" prospect={{ profile: me, posting: preview, interestedInYou: false, note: '' }} />
+            <ProspectCard viewer="volunteer" prospect={{ profile: me, posting: preview, interestedInYou: false, note: '' }} />
           </div>
         </Modal>
       )}

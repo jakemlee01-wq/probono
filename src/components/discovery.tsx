@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Heart } from 'lucide-react';
 import type { AppState, Profile } from '@shared/types';
 import { LIMITS, textError } from '@shared/rules';
@@ -6,7 +6,7 @@ import { ProspectCard } from './prospect-card';
 import { Btn, Field, Modal, inputCls } from './bits';
 import { useAct } from '@/lib/act';
 
-export function Discovery({ state, me, postingId, goProfile, goProject }: { state: AppState; me: Profile; postingId?: string; goProfile: () => void; goProject: (id: string) => void }) {
+export function Discovery({ state, me, postingId, goProfile, goProject, guide }: { state: AppState; me: Profile; postingId?: string; goProfile: () => void; goProject: (id: string) => void; guide?: ReactNode }) {
   const { run, pending } = useAct();
   const [sheet, setSheet] = useState(false);
   const [note, setNote] = useState('');
@@ -17,17 +17,17 @@ export function Discovery({ state, me, postingId, goProfile, goProject }: { stat
   const full = state.capacity.full;
 
   if (isNp && state.reviewGate?.waiting)
-    return <Empty title="Waiting for review" body={`Before volunteers can see your postings, the probono pilot team reviews your organization (status: ${state.reviewGate.status.replace('_', ' ')}). You can write postings now. There's no set review time yet.`} cta="Write a posting" onCta={goProfile} />;
+    return <>{guide && <div className="mb-2">{guide}</div>}<Empty title="Waiting for review" body={`Before volunteers can see your postings, the probono pilot team reviews your organization (status: ${state.reviewGate.status.replace('_', ' ')}). You can write postings now. There's no set review time yet.`} cta="Write a posting" onCta={goProfile} /></>;
   if (isNp && state.postings.length === 0)
-    return <Empty title="Post your first need" body="Describe one piece of finance or accounting work where a few volunteer hours would help. Volunteers who fit will show up here." cta="Write a posting" onCta={goProfile} />;
+    return <>{guide && <div className="mb-2">{guide}</div>}<Empty title="Post your first need" body="Describe one piece of finance or accounting work where a few volunteer hours would help. Volunteers who fit will show up here." cta="Write a posting" onCta={goProfile} /></>;
   if (me.paused)
-    return <Empty title="Your profile is paused" body="You're hidden from discovery and can't receive new interest. Current projects continue as normal." cta="Go to profile" onCta={goProfile} />;
+    return <>{guide && <div className="mb-2">{guide}</div>}<Empty title="Your profile is paused" body="You're hidden from discovery and can't receive new interest. Current projects continue as normal." cta="Go to profile" onCta={goProfile} /></>;
   const list = state.prospects;
   const p = list[full ? browse % Math.max(1, list.length) : 0];
   if (!p && full)
-    return <Empty title="Nothing else to browse right now" body={state.capacity.reason} cta="Go to project" onCta={() => goProject(state.capacity.projectId!)} />;
+    return <>{guide && <div className="mb-2">{guide}</div>}<Empty title="Nothing else to browse right now" body={state.capacity.reason} cta="Go to project" onCta={() => goProject(state.capacity.projectId!)} /></>;
   if (!p)
-    return <Empty title={isNp ? 'No matching volunteers yet' : 'No matching projects yet'} body={isNp ? "Nobody in the pilot fits this posting right now. Widening the skills or terms can help." : "Nothing in the pilot fits your skills and terms right now. New postings show up here as they're reviewed."} cta={isNp ? 'Edit postings' : 'Review my terms'} onCta={goProfile} />;
+    return <>{guide && <div className="mb-2">{guide}</div>}<Empty title={isNp ? 'No matching volunteers yet' : 'No matching projects yet'} body={isNp ? "Nobody in the pilot fits this posting right now. Widening the skills or terms can help." : "Nothing in the pilot fits your skills and terms right now. New postings show up here as they're reviewed."} cta={isNp ? 'Edit postings' : 'Review my terms'} onCta={goProfile} /></>;
 
   const ids = { postingId: p.posting.id, volunteerId: isNp ? p.profile.id : me.id };
   const free = p.interestedInYou;
@@ -44,7 +44,7 @@ export function Discovery({ state, me, postingId, goProfile, goProject }: { stat
   return (
     <div data-fit className="mx-auto w-full max-w-md">
       {isNp && posting && <p className="mb-2 text-xs text-white/75">{notesLeft} interest message{notesLeft === 1 ? '' : 's'} remaining for this posting</p>}
-      <ProspectCard key={p.profile.id + p.posting.id} prospect={p} viewer={isNp ? 'nonprofit' : 'volunteer'} readOnly={full ? state.capacity.reason : undefined} />
+      <ProspectCard key={p.profile.id + p.posting.id} prospect={p} viewer={isNp ? 'nonprofit' : 'volunteer'} readOnly={full ? state.capacity.reason : undefined} overlay={guide} />
       {/* Directly under the card, in the page flow, so nothing overlaps. */}
       <div className="mt-2.5">
         {full ? (
@@ -57,9 +57,9 @@ export function Discovery({ state, me, postingId, goProfile, goProject }: { stat
           </div>
         ) : (
           <div className="mx-auto flex max-w-md overflow-hidden rounded-full border border-white/25 bg-plum2">
-            <button disabled={pending} onClick={() => run({ action: 'not_now', ...ids }, { quiet: true })} className="min-h-12 flex-1 py-4 text-sm font-semibold text-white/85 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-apricot disabled:opacity-50">Not now</button>
+            <button disabled={pending} onClick={() => run({ action: 'not_now', ...ids }, { quiet: true })} className="min-h-12 flex-1 py-3 text-sm font-semibold text-white/85 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-apricot disabled:opacity-50">Not now</button>
             <div className="w-px bg-white/25" />
-            <button disabled={pending} onClick={() => setSheet(true)} className="flex min-h-12 flex-1 items-center justify-center gap-2 bg-white py-4 text-sm font-semibold text-plum hover:bg-cream focus-visible:outline-2 focus-visible:outline-apricot disabled:opacity-50">
+            <button disabled={pending} onClick={() => setSheet(true)} className="flex min-h-12 flex-1 items-center justify-center gap-2 bg-white py-3 text-sm font-semibold text-plum hover:bg-cream focus-visible:outline-2 focus-visible:outline-apricot disabled:opacity-50">
               <Heart size={16} aria-hidden />Show interest
             </button>
           </div>
